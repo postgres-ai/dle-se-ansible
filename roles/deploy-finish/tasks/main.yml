@@ -5,12 +5,12 @@
     run_once: true
     debug:
       msg:
-        - "DLE local URL: http://localhost:{{ dle_port }}"
-        - "DLE local URL: http://localhost:{{ dle_ui_port }}"
+        - "DLE Server local URL: http://localhost:{{ dle_port }}"
+        - "DLE UI local URL: http://localhost:{{ dle_ui_port }}"
         - "Monitoring (Netdata) local URL: http://localhost:{{ netdata_port }}"
-        - "DLE public URL: {{ dle_public_url | default('Not available. Install proxy server') }}"
-        - "SSH-tunnels:"
-        - "  - To Database Lab Engine: 'ssh -N -L {{ dle_port }}:127.0.0.1:{{ dle_port }} {{ username }}@{{ dle_host }} -i YOUR_PRIVATE_KEY'"
-        - "  - To DLE UI: 'ssh -N -L {{ dle_ui_port }}:127.0.0.1:{{ dle_ui_port }} {{ username }}@{{ dle_host }} -i YOUR_PRIVATE_KEY'"
-        - "  - To monitoring tool (Netdata): 'ssh -N -L {{ netdata_port }}:127.0.0.1:{{ netdata_port }} {{ username }}@{{ dle_host }} -i YOUR_PRIVATE_KEY'"
+        - "DLE public URL: {{ dle_public_url | default('Not available. The proxy server is not installed. Use SSH port forwarding to access DLE.') }}"
+        - "SSH-port-forwarding:"
+        - "  - For DLE API: 'ssh -N -L {{ dle_port }}:127.0.0.1:{{ dle_port }} {{ dle_host }} -i YOUR_PRIVATE_KEY'"
+        - "  - For DLE UI: 'ssh -N -L {{ dle_ui_port }}:127.0.0.1:{{ dle_ui_port }} {{ dle_host }} -i YOUR_PRIVATE_KEY'"
+        - "  - To monitoring tool (Netdata): 'ssh -N -L {{ netdata_port }}:127.0.0.1:{{ netdata_port }} {{ dle_host }} -i YOUR_PRIVATE_KEY'"
 ...

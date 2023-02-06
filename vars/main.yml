@@ -1,16 +1,16 @@
 ---
 # System
-postgres_major_version: 15
+username: "root"  # system user, owner of configuration files
 
 # ZFS pool
+zpool_disk: ""  # specify an empty disk for the ZFS pool (e.g.: /dev/sdb). If not specified, an attempt will be made to automatically detect an empty volume.
 zpool_name: "dblab_pool"
 zpool_mount_dir: "/var/lib/dblab"
-zpool_datasets_number: 2
+zpool_datasets_number: 2  # number of datasets for the ZFS pool. When the DLE is deployed, you can increase the number of datasets (if necessary).
 
 # DLE
-username: "root"
 dle_verification_token: "some-secret-token"
-dle_base_path: "/home/{{ username }}/.dblab"
+dle_base_path: "/root/.dblab"
 dle_config_path: "{{ dle_base_path }}/engine/configs"
 dle_meta_path: "{{ dle_base_path }}/engine/meta"
 dle_logs_path: "{{ dle_base_path }}/engine/logs"
@@ -19,9 +19,10 @@ dle_logs_path: "{{ dle_base_path }}/engine/logs"
 dle_dump_location: "{{ zpool_mount_dir }}/{{ zpool_name }}/dataset_1/dump"
 
 dle_container_host: 127.0.0.1
+dle_container_name: dblab_server
 dle_port: 2345
-dle_version: v3.3.0
-dle_ui_docker_image_version: 1.1.6
+dle_version: 3.3.0
+dle_ui_version: 1.1.6
 dle_ui_port: 2346
 
 dle_computing_infrastructure: "do"
@@ -29,6 +30,7 @@ dle_computing_infrastructure: "do"
 # CLI
 cli_install: true
 cli_version: latest
+cli_environment_id: dblab
 
 # Monitoring
 

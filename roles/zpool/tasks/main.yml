@@ -1,23 +1,33 @@
 ---
+- name: Check if ZFS pool is already exist
+  command: "zpool status -v {{ zpool_name }}"
+  register: zpool_status
+  changed_when: false
+  failed_when: false
+  when:
+    - zpool_name is defined
+    - zpool_name | length > 0
 
-- block:  # Create zpool
-    - name: Make sure zfsutils is installed
-      package:
-        name: zfsutils-linux
-        state: present
-      environment: "{{ proxy_env | default({}) }}"
-
-    - name: Check if pool is already exist
-      command: "zpool status -v {{ zpool_name }}"
-      register: zpool_status
-      changed_when: false
-      failed_when: false
-
-    - name: Detect volume
-      shell: lsblk -e7 --output PATH,NAME,FSTYPE,TYPE --json | jq -r '.blockdevices[] | select(.children == null and .fstype == null and .type == "disk") | .path'
+# Create zpool
+- block:  # if the zpool_disk variable is not defined, try to detect an empty disk
+    - name: Detect empty volume
+      shell: |
+        set -o pipefail;
+        lsblk -e7 --output NAME,FSTYPE,TYPE --json \
+          | jq -r '.blockdevices[] | select(.children == null and .fstype == null and .type == "disk") | .name'
+      args:
+        executable: /bin/bash
       register: zpool_volume
+      changed_when: false
 
-    - name: Create zpool
+    # Stop, if empty volume is not detected
+    - name: The empty volume is not detected
+      fail:
+        msg: "Whoops! The empty volume is not detected."
+      when: zpool_volume.stdout is defined and zpool_volume.stdout | length < 1
+
+    # if empty disk is detected, use it
+    - name: Create zpool (use /dev/{{ zpool_volume.stdout }})
       command: >-
         zpool create -f
         -O compression=on
@@ -25,11 +35,75 @@
         -O recordsize=128k
         -O logbias=throughput
         -m {{ zpool_mount_dir }}/{{ zpool_name }}
-        {{ zpool_name }} {{ zpool_volume.stdout }}
-      when: zpool_status.rc != 0
+        {{ zpool_name }} /dev/{{ zpool_volume.stdout }}
+  when:
+    - zpool_status.rc != 0
+    - zpool_name is defined
+    - zpool_mount_dir is defined
+    - zpool_disk is defined
+    - zpool_disk | length < 1
+  tags:
+    - zpool
+
+- block:  # if the zpool_disk variable is defined, use this disk
+    - name: "Read device information ({{ zpool_disk }})"
+      shell: |
+        set -o pipefail;
+        lsblk {{ zpool_disk }} --output FSTYPE,MOUNTPOINT,TYPE --json | jq -r '.blockdevices'
+      args:
+        executable: /bin/bash
+      register: lsblk_result
+      changed_when: false
+
+    # Stop, if the disk contains mountpoint or file system (except when the file system type is equal to zfs_member)
+    # it is acceptable if the disk contains empty partitions
+    - name: Check that the disk does not contain mount points or file system
+      fail:
+        msg:
+          - "The disk {{ zpool_disk }} is not empty (mountpoint: {{ item.mountpoint }}, fstype: {{ item.fstype }})"
+      when: (item.mountpoint is defined and item.mountpoint != None) or
+            (item.fstype is defined and (item.fstype != None and item.fstype != "zfs_member"))
+      loop: "{{ lsblk_result.stdout }}"
+
+    - name: Create zpool (use {{ zpool_disk }})
+      command: >-
+        zpool create -f
+        -O compression=on
+        -O atime=off
+        -O recordsize=128k
+        -O logbias=throughput
+        -m {{ zpool_mount_dir }}/{{ zpool_name }}
+        {{ zpool_name }} {{ zpool_disk }}
+  when:
+    - zpool_status.rc != 0
+    - zpool_name is defined
+    - zpool_mount_dir is defined
+    - zpool_disk is defined
+    - zpool_disk | length > 0
+  tags:
+    - zpool
+
+# Create datasets
+- block:
+    - name: "Check the number of datasets for the {{ zpool_name }}"
+      shell: |
+        set -o pipefail;
+        zfs list -t filesystem | grep {{ zpool_name }} | grep -c dataset
+      args:
+        executable: /bin/bash
+      register: datasets_number_result
+      changed_when: false
+      failed_when: false
 
     - name: Create datasets
       command: zfs create "{{ zpool_name }}/{{ item }}"
-      with_sequence: start=1 count={{ zpool_datasets_number }} format=dataset_%d
-      when: zpool_status.rc != 0 and zpool_datasets_number > 0
+      with_sequence: start={{ datasets_number_result.stdout|int +1 }} count={{ zpool_datasets_number|int - datasets_number_result.stdout|int }} format=dataset_%d
+      when: (zpool_status.rc != 0 and zpool_datasets_number|int > 0) or
+            (zpool_status.rc == 0 and zpool_datasets_number|int > datasets_number_result.stdout|int)
+  when:
+    - zpool_name is defined
+    - zpool_datasets_number is defined
+  tags:
+    - zpool
+    - datasets
 ...

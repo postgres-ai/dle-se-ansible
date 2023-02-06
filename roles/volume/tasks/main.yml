@@ -1,31 +1,37 @@
 ---
 - block:
+  - name: "Read device information ({{ zpool_disk }})"
+    shell: |
+      set -o pipefail;
+      lsblk {{ zpool_disk }} --output FSTYPE,MOUNTPOINT,TYPE --json | jq -r '.blockdevices'
+    args:
+      executable: /bin/bash
+    register: lsblk_result
+    changed_when: false
 
-  - name: Clean up volume
-    shell: "wipefs -fa {{ zpool_disk }}"
+  - name: "Print device information ({{ zpool_disk }})"
+    debug:
+      msg: "{{ lsblk_result.stdout }}"
 
-  - name: Umount
-    shell: "umount -q {{ zpool_disk }}"
-    ignore_errors: true
+  # Stop, if the disk contains the root mountpoint
+  - name: Check for root mountpoint
+    fail:
+      msg:
+       - "Invalid mountpoint: '/'"
+       - "The disk contains the root file system. Please make sure that you have specified the correct disk in the zpool_disk variable."
+    when: item.mountpoint is defined and item.mountpoint == '/'
+    loop: "{{ lsblk_result.stdout }}"
 
-#  - name: Unmount volume
-#    mount:
-#      path: "{{ zpool_disk }}"
-#      state: absent
+  - name: "Umount all mountpoints for {{ zpool_disk }} (if mounted)"
+    command: "umount -q {{ item.mountpoint }}"
+    when: item.mountpoint is defined and item.mountpoint != None
+    loop: "{{ lsblk_result.stdout }}"
 
-  - name: Read device information
-    parted:
-      device: "{{ zpool_disk }}"
-    register: sdb_info
-
-  - name: Remove all partitions from disk
-    parted:
-      device: "{{ sdb_info.disk.dev }}"
-      number: '{{ item.num }}'
-      state: absent
-    loop: '{{ sdb_info.partitions }}'
-
-  environment: "{{ proxy_env | default({}) }}"
+  - name: "Clean up device {{ zpool_disk }}"
+    command: "wipefs -fa {{ zpool_disk }}"
+    when: (item.fstype is defined and item.fstype != None) or
+          (item.type is defined and item.type == "part")
+    loop: "{{ lsblk_result.stdout }}"
   when:
     - zpool_disk is defined
     - zpool_disk | length > 0
