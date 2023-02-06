@@ -16,6 +16,7 @@
     - name: Detect volume
       shell: lsblk -e7 --output PATH,NAME,FSTYPE,TYPE --json | jq -r '.blockdevices[] | select(.children == null and .fstype == null and .type == "disk") | .path'
       register: zpool_volume
+      changed_when: false
 
     - name: Create zpool
       command: >-
