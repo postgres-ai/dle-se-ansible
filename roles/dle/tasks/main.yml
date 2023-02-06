@@ -12,22 +12,13 @@
     loop_control:
       loop_var: dir_item
 
-  - name: Download logical DLE config template
-    get_url:
-      url: "https://gitlab.com/postgres-ai/database-lab/-/raw/{{ dle_version }}/engine/configs/config.example.logical_generic.yml"
+  - name: Generate conf file "{{ dle_config_path }}/server.yml"
+    template:
+      src: templates/server.yml.j2
       dest: "{{ dle_config_path }}/server.yml"
-      timeout: 60
-
-  - name: Replace config with yq
-    shell: yq e -i '.embeddedUI.host="" |
-      .embeddedUI.port={{ dle_ui_port }}|
-      .embeddedUI.dockerImage="postgresai/ce-ui:{{ dle_ui_docker_image_version }}"|
-      .server.verificationToken="{{ dle_verification_token }}" |
-      .global.debug=true |
-      .poolManager.mountDir="{{ zpool_mount_dir }}/{{ zpool_name }}" |
-      .retrieval.spec.logicalDump.options.dumpLocation="{{ dle_dump_location }}" |
-      .retrieval.spec.logicalRestore.options.forceInit=true |
-      .retrieval.spec.logicalRestore.options.dumpLocation="{{ dle_dump_location }}"' {{ dle_config_path }}/server.yml
+      owner: "{{ username }}"
+      group: "{{ username }}"
+      mode: 0644
 
   - name: Create pending.retrieval
     file:
