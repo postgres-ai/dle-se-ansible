@@ -1,0 +1,5 @@
+#!/bin/bash
+umask 0177
+cp /etc/letsencrypt/live/{{ certbot_domain }}/fullchain.pem /etc/envoy/certs/fullchain1.pem
+cp /etc/letsencrypt/live/{{ certbot_domain }}/privkey.pem   /etc/envoy/certs/privkey1.pem
+systemctl restart envoy

@@ -1,0 +1,12 @@
+---
+# "Check system" variables
+
+os_valid_distributions:
+  - Ubuntu
+  - Debian
+
+os_minimum_versions:
+  Ubuntu: 20.04
+  Debian: 10
+
+...

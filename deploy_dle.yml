@@ -1,0 +1,81 @@
+---
+
+- name: Deploy DLE
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  vars:
+    minimal_ansible_version: 2.10.0
+  tasks:
+    - add_host:
+        name: "{{ dle_host }}"
+        groups: dle_group
+      changed_when: false
+    - name: Checking ansible version
+      fail:
+        msg: "Ansible version must be {{ minimal_ansible_version }} or higher"
+      when: ansible_version.full is version(minimal_ansible_version, '<')
+
+- name: Preparing the system
+  hosts: dle_group
+  become: true
+  become_method: sudo
+  gather_facts: true
+  tags: always
+  any_errors_fatal: true
+  vars_files:
+    - vars/main.yml
+  environment: "{{ proxy_env | default({}) }}"
+
+  pre_tasks:
+    - name: Checking Linux distribution
+      fail:
+        msg: "{{ ansible_distribution }} is not supported"
+      when: ansible_distribution not in os_valid_distributions
+      tags: always
+
+    - name: Checking version of OS Linux
+      fail:
+        msg: "{{ ansible_distribution_version }} of {{ ansible_distribution }} is not supported"
+      when: ansible_distribution_version is version_compare(os_minimum_versions[ansible_distribution], '<')
+      tags: always
+
+    - name: Include OS-specific variables
+      include_vars: "vars/{{ ansible_os_family }}.yml"
+      tags: always
+
+    - name: Update apt cache
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Make sure the gnupg and apt-transport-https packages are present
+      apt:
+        pkg:
+          - gnupg
+          - apt-transport-https
+        state: present
+      when: ansible_os_family == "Debian"
+
+  roles:
+    # Prepare system
+    - role: add-repository
+    - role: packages
+    - role: zpool
+
+    # Configure and start DLE
+    - role: dle
+    - role: cli
+
+    # Proxy server
+    - role: proxy
+
+    # Monitoring
+    - role: netdata
+
+    # finish (connection info)
+    - role: deploy-finish
+
+...

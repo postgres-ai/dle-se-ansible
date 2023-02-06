@@ -1,0 +1,74 @@
+---
+
+- block:
+    - name: Install Envoy Proxy
+      apt:
+        name: "getenvoy-envoy"
+        state: "present"
+      ignore_errors: "{{ ansible_check_mode }}"
+
+    - name: Create envoy directory
+      file:
+        path: /etc/envoy/
+        state: directory
+        owner: root
+        group: root
+        mode: "0777"
+
+    - name: Create certs directory
+      file:
+        path: /etc/envoy/certs
+        state: directory
+        owner: root
+        group: root
+        mode: "0777"
+
+    - name: Create certificate
+      include_role:
+        name: geerlingguy.certbot
+
+    - name: Create a link to certificates
+      file:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: o+r
+        owner: root
+        group: root
+        state: link
+      loop:
+        - { dest: /etc/envoy/certs/fullchain1.pem, src: "/etc/letsencrypt/live/{{ certbot_domain }}/fullchain.pem" }
+        - { dest: /etc/envoy/certs/privkey1.pem, src: "/etc/letsencrypt/live/{{ certbot_domain }}/privkey.pem" }
+
+    - name: Copy templates
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: root
+        mode: "0777"
+      loop:
+        - { src: envoy.service.j2, dest: /etc/systemd/system/envoy.service }
+        - { src: envoy.yaml.j2, dest: /etc/envoy/envoy.yaml }
+        - { src: envoy.deploy.j2, dest: /etc/letsencrypt/renewal-hooks/deploy/envoy.deploy }
+
+    - name: Enable and restart envoy service
+      service:
+        name: envoy
+        enabled: yes
+        state: restarted
+
+    - name: Replace accessHost parameter in the DLE config
+      shell: yq e -i '.cloning.accessHost="{{ certbot_domain }}"' {{ dle_config_path }}/server.yml
+
+    - name: Generate public URL
+      set_fact:
+        dle_public_url: "https://{{ certbot_domain }}:{{ proxy_dle_public_port }}/instance"
+
+  environment: "{{ proxy_env | default({}) }}"
+  when:
+    - proxy_install is defined
+    - proxy_install | bool
+    - certbot_domain is defined
+    - certbot_domain | length > 0
+  tags: proxy
+...

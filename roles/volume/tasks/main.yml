@@ -1,0 +1,33 @@
+---
+- block:
+
+  - name: Clean up volume
+    shell: "wipefs -fa {{ zpool_disk }}"
+
+  - name: Umount
+    shell: "umount -q {{ zpool_disk }}"
+    ignore_errors: true
+
+#  - name: Unmount volume
+#    mount:
+#      path: "{{ zpool_disk }}"
+#      state: absent
+
+  - name: Read device information
+    parted:
+      device: "{{ zpool_disk }}"
+    register: sdb_info
+
+  - name: Remove all partitions from disk
+    parted:
+      device: "{{ sdb_info.disk.dev }}"
+      number: '{{ item.num }}'
+      state: absent
+    loop: '{{ sdb_info.partitions }}'
+
+  environment: "{{ proxy_env | default({}) }}"
+  when:
+    - zpool_disk is defined
+    - zpool_disk | length > 0
+  tags: volume
+...

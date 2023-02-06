@@ -1,0 +1,12 @@
+---
+# Debian
+- name: Install system packages
+  apt:
+    name: "{{ item }}"
+    state: present
+  loop: "{{ system_packages }}"
+  environment: "{{ proxy_env | default({}) }}"
+  when: ansible_os_family == "Debian"
+  tags: install_packages
+
+...

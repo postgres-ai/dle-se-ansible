@@ -1,0 +1,56 @@
+---
+# System
+postgres_major_version: 15
+
+# ZFS pool
+zpool_name: "dblab_pool"
+zpool_mount_dir: "/var/lib/dblab"
+zpool_datasets_number: 2
+
+# DLE
+username: "root"
+dle_verification_token: "some-secret-token"
+dle_base_path: "/home/{{ username }}/.dblab"
+dle_config_path: "{{ dle_base_path }}/engine/configs"
+dle_meta_path: "{{ dle_base_path }}/engine/meta"
+dle_logs_path: "{{ dle_base_path }}/engine/logs"
+
+# Use a dataset directory for dumping data
+dle_dump_location: "{{ zpool_mount_dir }}/{{ zpool_name }}/dataset_1/dump"
+
+dle_container_host: 127.0.0.1
+dle_port: 2345
+dle_version: v3.3.0
+dle_ui_docker_image_version: 1.1.6
+dle_ui_port: 2346
+
+dle_computing_infrastructure: "do"
+
+# CLI
+cli_install: true
+cli_version: latest
+
+# Monitoring
+
+# Netdata - https://github.com/netdata/netdata
+netdata_install: true
+netdata_version: 1.37.1
+netdata_port: 19999
+
+# Proxy
+proxy_install: false # Set "true" to install Envoy proxy and issue Let's Encrypt certificate
+proxy_dle_public_port: 446
+certbot_install_method: snap
+certbot_create_if_missing: true
+certbot_create_method: standalone
+certbot_auto_renew: true
+certbot_auto_renew_user: "{{ username | default(lookup('env', 'USER')) }}"
+certbot_auto_renew_hour: "3"
+certbot_auto_renew_minute: "30"
+certbot_admin_email: "" # Email to issue certificate, for example, admin@example.com
+certbot_domain: "" # Domain to issue certificate, for example, example.com
+certbot_certs:
+  - email: "{{ certbot_admin_email }}"
+    domains:
+     - "{{ certbot_domain }}"
+...

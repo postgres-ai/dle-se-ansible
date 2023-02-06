@@ -1,0 +1,35 @@
+---
+
+- block:  # Create zpool
+    - name: Make sure zfsutils is installed
+      package:
+        name: zfsutils-linux
+        state: present
+      environment: "{{ proxy_env | default({}) }}"
+
+    - name: Check if pool is already exist
+      command: "zpool status -v {{ zpool_name }}"
+      register: zpool_status
+      changed_when: false
+      failed_when: false
+
+    - name: Detect volume
+      shell: lsblk -e7 --output PATH,NAME,FSTYPE,TYPE --json | jq -r '.blockdevices[] | select(.children == null and .fstype == null and .type == "disk") | .path'
+      register: zpool_volume
+
+    - name: Create zpool
+      command: >-
+        zpool create -f
+        -O compression=on
+        -O atime=off
+        -O recordsize=128k
+        -O logbias=throughput
+        -m {{ zpool_mount_dir }}/{{ zpool_name }}
+        {{ zpool_name }} {{ zpool_volume.stdout }}
+      when: zpool_status.rc != 0
+
+    - name: Create datasets
+      command: zfs create "{{ zpool_name }}/{{ item }}"
+      with_sequence: start=1 count={{ zpool_datasets_number }} format=dataset_%d
+      when: zpool_status.rc != 0 and zpool_datasets_number > 0
+...

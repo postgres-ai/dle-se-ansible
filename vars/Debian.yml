@@ -1,0 +1,35 @@
+# Repository
+apt_repository_keyservers:
+  - keyserver: keyserver.ubuntu.com # yq repository apt key
+    id: CC86BB64
+apt_repository_keys:
+  - key: "https://download.docker.com/linux/{{ ansible_distribution|lower }}/gpg" # docker repository apt key
+  - key: "https://www.postgresql.org/media/keys/ACCC4CF8.asc"  # postgresql repository apt key
+  - key: "https://deb.dl.getenvoy.io/public/gpg.8115BA8E629CC074.key" # Envoy
+apt_repository:
+  - repo: ppa:rmescandon/yq
+  - repo: "deb https://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main"  # postgresql apt repository
+  - repo: "deb [arch=amd64] https://download.docker.com/linux/{{ ansible_distribution|lower }} {{ ansible_distribution_release }} stable"  # docker apt repository
+  - filename: envoyproxy
+    repo: "deb [arch=amd64] https://deb.dl.getenvoy.io/public/deb/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} main"
+    update_cache: yes
+    mode: 0644
+
+# Packages (for apt repo)
+system_packages:
+  - apt-transport-https
+  - ca-certificates
+  - gnupg-agent
+  - python3-software-properties
+  - python3-docker
+  - software-properties-common
+  - curl
+  - gnupg2
+  - zfsutils-linux
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - "postgresql-client-{{ postgres_major_version }}"
+  - s3fs
+  - yq
+  - jq
