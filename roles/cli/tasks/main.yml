@@ -1,11 +1,5 @@
 ---
 
-- name: Check if the dblab CLI is initialized
-  command: dblab instance status
-  register: dblab_result
-  changed_when: false
-  failed_when: false
-
 - block:
     - name: Download dblab CLI binary
       get_url:
@@ -22,17 +16,24 @@
         mode: u+x,g+x,o+x
         remote_src: true
 
-    - name: Initialize CLI configuration
-      command: >-
-        dblab init
-        --environment-id=dblab
-        --url=http://localhost:{{ dle_port }}
-        --token={{ dle_verification_token }}
-        --insecure
+    - name: Create CLI configuration directory
+      file:
+        dest: "{{ dle_base_path }}/cli"
+        state: directory
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: 0644
+
+    - name: Generate CLI conf file "{{ dle_base_path }}/cli/cli.yml"
+      template:
+        src: templates/cli.yml.j2
+        dest: "{{ dle_base_path }}/cli/cli.yml"
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: 0600
   when:
     - cli_install is defined
     - cli_install | bool
-    - dblab_result.rc != 0
   tags: cli
 
 ...

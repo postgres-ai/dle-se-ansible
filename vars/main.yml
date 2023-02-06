@@ -29,6 +29,7 @@ dle_computing_infrastructure: "do"
 # CLI
 cli_install: true
 cli_version: latest
+cli_environment_id: dblab
 
 # Monitoring
 
