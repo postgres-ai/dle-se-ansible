@@ -24,6 +24,7 @@
         executable: /bin/bash
       register: zpool_volume
       changed_when: false
+      when: zpool_status.rc != 0
 
     - name: Create zpool
       command: >-
