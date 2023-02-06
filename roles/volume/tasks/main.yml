@@ -2,10 +2,10 @@
 - block:
 
   - name: Clean up volume
-    shell: "wipefs -fa {{ zpool_disk }}"
+    command: "wipefs -fa {{ zpool_disk }}"
 
   - name: Umount
-    shell: "umount -q {{ zpool_disk }}"
+    command: "umount -q {{ zpool_disk }}"
     ignore_errors: true
 
 #  - name: Unmount volume
