@@ -8,9 +8,9 @@ zpool_mount_dir: "/var/lib/dblab"
 zpool_datasets_number: 2
 
 # DLE
-username: "root"
+username: "{{ ansible_user_id }}"
 dle_verification_token: "some-secret-token"
-dle_base_path: "/home/{{ username }}/.dblab"
+dle_base_path: "{{ ansible_user_dir }}/.dblab"
 dle_config_path: "{{ dle_base_path }}/engine/configs"
 dle_meta_path: "{{ dle_base_path }}/engine/meta"
 dle_logs_path: "{{ dle_base_path }}/engine/logs"
