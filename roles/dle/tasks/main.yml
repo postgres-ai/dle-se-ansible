@@ -43,7 +43,6 @@
         name: dblab_server
         image: "postgresai/dblab-server:{{ dle_version[1:] }}"
         state: started
-        restart: yes
         privileged: true
         container_default_behavior: "compatibility"
         volumes:
