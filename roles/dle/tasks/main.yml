@@ -36,6 +36,8 @@
       owner: "{{ username }}"
       group: "{{ username }}"
       mode: u=rw,g=rw,o=rw
+      modification_time: preserve
+      access_time: preserve
 
 - block:
     - name: Start DLE service
