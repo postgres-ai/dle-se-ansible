@@ -1,7 +1,7 @@
 ---
 
 - block:
-    - name: Start DLE service
+    - name: Start DLE container
       docker_container:
         name: dblab_server
         image: "postgresai/dblab-server:{{ dle_version[1:] }}"
