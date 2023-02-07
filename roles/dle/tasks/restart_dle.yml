@@ -4,7 +4,7 @@
     - name: Start DLE container
       docker_container:
         name: dblab_server
-        image: "postgresai/dblab-server:{{ dle_version[1:] }}"
+        image: "postgresai/dblab-server:v{{ dle_version }}"
         state: started
         restart: yes
         privileged: true
