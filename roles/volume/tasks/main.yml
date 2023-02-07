@@ -13,7 +13,7 @@
     debug:
       msg: "{{ lsblk_result.stdout }}"
 
-  - name: "Umount all mountpoints (if mounted) for {{ zpool_disk }}"
+  - name: "Umount all mountpoints for {{ zpool_disk }} (if mounted)"
     command: "umount -q {{ item.mountpoint }}"
     when: item.mountpoint is defined and item.mountpoint != None
     loop: "{{ lsblk_result.stdout }}"
