@@ -1,6 +1,6 @@
 ---
 - block:
-  - name: Read device information
+  - name: "Read device information ({{ zpool_disk }})"
     shell: |
       set -o pipefail;
       lsblk {{ zpool_disk }} --output FSTYPE,MOUNTPOINT,PATH --json | jq -r '.blockdevices'
@@ -9,11 +9,11 @@
     register: lsblk_result
     changed_when: false
 
-  - name: Print device information
+  - name: "Print device information ({{ zpool_disk }})"
     debug:
       msg: "{{ lsblk_result.stdout }}"
 
-  - name: Umount all mountpoints (if mounted)
+  - name: "Umount all mountpoints (if mounted) for {{ zpool_disk }}"
     command: "umount -q {{ item.mountpoint }}"
     when: item.mountpoint is defined and item.mountpoint != None
     loop: "{{ lsblk_result.stdout }}"
