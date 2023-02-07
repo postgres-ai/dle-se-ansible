@@ -1,31 +1,27 @@
 ---
 - block:
-
-  - name: Clean up volume
-    command: "wipefs -fa {{ zpool_disk }}"
-
-  - name: Umount
-    command: "umount -q {{ zpool_disk }}"
-    ignore_errors: true
-
-#  - name: Unmount volume
-#    mount:
-#      path: "{{ zpool_disk }}"
-#      state: absent
-
   - name: Read device information
-    parted:
-      device: "{{ zpool_disk }}"
-    register: sdb_info
+    shell: |
+      set -o pipefail;
+      lsblk {{ zpool_disk }} --output FSTYPE,MOUNTPOINT,PATH --json | jq -r '.blockdevices'
+    args:
+      executable: /bin/bash
+    register: lsblk_result
+    changed_when: false
 
-  - name: Remove all partitions from disk
-    parted:
-      device: "{{ sdb_info.disk.dev }}"
-      number: '{{ item.num }}'
-      state: absent
-    loop: '{{ sdb_info.partitions }}'
+  - name: Print device information
+    debug:
+      msg: "{{ lsblk_result.stdout }}"
 
-  environment: "{{ proxy_env | default({}) }}"
+  - name: Umount all mountpoints (if mounted)
+    command: "umount -q {{ item.mountpoint }}"
+    when: item.mountpoint is defined and item.mountpoint != None
+    loop: "{{ lsblk_result.stdout }}"
+
+  - name: "Clean up device {{ zpool_disk }}"
+    command: "wipefs -fa {{ zpool_disk }}"
+    when: item.fstype is defined and item.fstype != None
+    loop: "{{ lsblk_result.stdout }}"
   when:
     - zpool_disk is defined
     - zpool_disk | length > 0
