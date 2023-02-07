@@ -3,6 +3,7 @@
 postgres_major_version: 15
 
 # ZFS pool
+zpool_disk: ""  # specify an empty disk for the ZFS pool (e.g.: /dev/sdb). If not specified, an attempt will be made to automatically detect an empty volume.
 zpool_name: "dblab_pool"
 zpool_mount_dir: "/var/lib/dblab"
 zpool_datasets_number: 2  # number of datasets for the ZFS pool. When the DLE is deployed, you can increase the number of datasets (if necessary).

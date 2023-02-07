@@ -7,6 +7,7 @@
       changed_when: false
       failed_when: false
 
+    # If zpool_disk variable is not defined, try to detected an empty disk
     - name: Detect empty volume
       shell: |
         set -o pipefail;
@@ -16,9 +17,16 @@
         executable: /bin/bash
       register: zpool_volume
       changed_when: false
-      when: zpool_status.rc != 0
+      when: zpool_status.rc != 0 and zpool_disk | length < 1
 
-    - name: Create zpool
+    # Stop, if empty volume is not detected
+    - name: The empty volume is not detected
+      fail:
+        msg: "Whoops! The empty volume is not detected."
+      when: zpool_volume.stdout is defined and zpool_volume.stdout | length < 1
+
+    # If zpool_disk variable is not defined and empty disk is detected, use it
+    - name: Create zpool (use {{ zpool_volume.stdout }})
       command: >-
         zpool create -f
         -O compression=on
@@ -27,7 +35,19 @@
         -O logbias=throughput
         -m {{ zpool_mount_dir }}/{{ zpool_name }}
         {{ zpool_name }} {{ zpool_volume.stdout }}
-      when: zpool_status.rc != 0
+      when: zpool_status.rc != 0 and (zpool_disk is not defined or zpool_disk | length < 1)
+
+    # If zpool_disk variable is defined, use this disk
+    - name: Create zpool (use {{ zpool_disk }})
+      command: >-
+        zpool create -f
+        -O compression=on
+        -O atime=off
+        -O recordsize=128k
+        -O logbias=throughput
+        -m {{ zpool_mount_dir }}/{{ zpool_name }}
+        {{ zpool_name }} {{ zpool_disk }}
+      when: zpool_status.rc != 0 and (zpool_disk is defined and zpool_disk | length > 0)
 
     - name: "Check the number of datasets for the {{ zpool_name }}"
       shell: |
