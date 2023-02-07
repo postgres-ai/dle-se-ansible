@@ -31,4 +31,54 @@
       modification_time: preserve
       access_time: preserve
 
+- block:
+    - name: Start DLE container
+      docker_container:
+        name: dblab_server
+        image: "postgresai/dblab-server:{{ dle_version }}"
+        state: started
+        privileged: true
+        container_default_behavior: "compatibility"
+        volumes:
+          - /var/run/docker.sock:/var/run/docker.sock
+          - /var/lib/dblab:/var/lib/dblab/:rshared
+          - "{{ dle_config_path }}:/home/dblab/configs"
+          - "{{ dle_meta_path }}:/home/dblab/meta"
+          - "{{ dle_logs_path }}:/home/dblab/logs"
+          - "{{ dle_dump_location }}:{{ dle_dump_location }}"
+          - /sys/kernel/debug:/sys/kernel/debug:rw
+          - /lib/modules:/lib/modules:ro
+          - /proc:/host_proc:ro
+        ports:
+          - "{{ dle_container_host }}:{{ dle_port }}:{{ dle_port }}"
+        env:
+          DOCKER_API_VERSION: "1.39"
+          DLE_COMPUTING_INFRASTRUCTURE: "{{ dle_computing_infrastructure }}"
+
+    - name: Wait for DLE port to be available
+      wait_for:
+        port: "{{ dle_port }}"
+        host: "localhost"
+        state: started
+        timeout: 60
+        delay: 10
+      ignore_errors: false
+
+    - name: Check that DLE is healthy
+      uri:
+        url: "http://localhost:{{ dle_port }}/healthz"
+      register: _result
+      until: _result.status == 200
+      retries: 10
+      delay: 10
+
+    - name: Check that DLE UI is available
+      wait_for:
+        port: "{{ dle_ui_port }}"
+        host: "localhost"
+        state: started
+        timeout: 30
+        delay: 10
+      ignore_errors: false
+
 ...
