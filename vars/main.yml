@@ -5,7 +5,7 @@ postgres_major_version: 15
 # ZFS pool
 zpool_name: "dblab_pool"
 zpool_mount_dir: "/var/lib/dblab"
-zpool_datasets_number: 2
+zpool_datasets_number: 2  # number of datasets for the ZFS pool. When the DLE is deployed, you can increase the number of datasets (if necessary).
 
 # DLE
 username: "{{ ansible_user_id }}"

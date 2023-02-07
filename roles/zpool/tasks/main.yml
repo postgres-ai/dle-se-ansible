@@ -1,19 +1,13 @@
 ---
 
 - block:  # Create zpool
-    - name: Make sure zfsutils is installed
-      package:
-        name: zfsutils-linux
-        state: present
-      environment: "{{ proxy_env | default({}) }}"
-
-    - name: Check if pool is already exist
+    - name: Check if ZFS pool is already exist
       command: "zpool status -v {{ zpool_name }}"
       register: zpool_status
       changed_when: false
       failed_when: false
 
-    - name: Detect volume
+    - name: Detect empty volume
       shell: |
         set -o pipefail;
         lsblk -e7 --output PATH,NAME,FSTYPE,TYPE --json \
@@ -35,8 +29,25 @@
         {{ zpool_name }} {{ zpool_volume.stdout }}
       when: zpool_status.rc != 0
 
+    - name: "Check the number of datasets for the {{ zpool_name }}"
+      shell: |
+        set -o pipefail;
+        zfs list -t filesystem | grep {{ zpool_name }} | grep -c dataset
+      args:
+        executable: /bin/bash
+      register: datasets_number_result
+      changed_when: false
+      failed_when: false
+
     - name: Create datasets
       command: zfs create "{{ zpool_name }}/{{ item }}"
-      with_sequence: start=1 count={{ zpool_datasets_number }} format=dataset_%d
-      when: zpool_status.rc != 0 and zpool_datasets_number > 0
+      with_sequence: start={{ datasets_number_result.stdout|int +1 }} count={{ zpool_datasets_number - datasets_number_result.stdout|int }} format=dataset_%d
+      when: (zpool_status.rc != 0 and zpool_datasets_number > 0) or
+            (zpool_status.rc == 0 and zpool_datasets_number > datasets_number_result.stdout|int)
+  when:
+    - zpool_name is defined
+    - zpool_mount_dir is defined
+    - zpool_datasets_number is defined
+  tags:
+    - zpool
 ...
