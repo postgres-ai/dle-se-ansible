@@ -25,7 +25,7 @@
           DOCKER_API_VERSION: "1.39"
           DLE_COMPUTING_INFRASTRUCTURE: "{{ dle_computing_infrastructure }}"
 
-    - name: Wait for DLE port to become open on the host
+    - name: Wait for DLE port to be available
       wait_for:
         port: "{{ dle_port }}"
         host: "localhost"
@@ -34,7 +34,7 @@
         delay: 10
       ignore_errors: false
 
-    - name: Check that the DLE is healthy
+    - name: Check that DLE is healthy
       uri:
         url: "http://localhost:{{ dle_port }}/healthz"
       register: _result
@@ -42,7 +42,7 @@
       retries: 10
       delay: 10
 
-    - name: Check DLE UI is running
+    - name: Check that DLE UI is available
       wait_for:
         port: "{{ dle_ui_port }}"
         host: "localhost"
