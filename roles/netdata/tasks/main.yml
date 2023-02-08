@@ -13,7 +13,7 @@
         name: netdata
         network_mode: host
         hostname: "{{ ansible_hostname }}"
-        image: "postgresai/netdata-for-dle:v{{ netdata_version }}"
+        image: "postgresai/netdata-for-dle:v{{ netdata_version | replace('v', '') }}"
         capabilities: sys_ptrace
         security_opts: apparmor:unconfined
         restart_policy: unless-stopped
