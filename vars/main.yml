@@ -20,7 +20,7 @@ dle_dump_location: "{{ zpool_mount_dir }}/{{ zpool_name }}/dataset_1/dump"
 dle_container_host: 127.0.0.1
 dle_port: 2345
 dle_version: 3.3.0
-dle_ui_docker_image_version: 1.1.6
+dle_ui_docker_image_version: 1.1.7
 dle_ui_port: 2346
 
 dle_computing_infrastructure: "do"
