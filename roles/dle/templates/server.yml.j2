@@ -31,7 +31,7 @@ embeddedUI:
   enabled: true
 
   # Docker image of the UI application.
-  dockerImage: "postgresai/ce-ui:{{ dle_ui_docker_image_version | replace('v', '') }}"
+  dockerImage: "postgresai/ce-ui:{{ dle_ui_version | replace('v', '') }}"
 
   # Host or IP address, from which the embedded UI container accepts HTTP connections.
   # By default, use a loop-back to accept only local connections.
