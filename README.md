@@ -28,7 +28,7 @@
    - Set DLE token that you'll be using (``), avoid using simple value
 - Run playbook to intall DLE SE on remote server:
     ```shell
-    ansible-playbook deploy_dle.yml --extra-vars working_host=user@server-ip-address # adjust connection here; if needed, add "--private-key /path" to specify an SSH private key
+    ansible-playbook deploy_dle.yml --extra-vars dle_host=user@server-ip-address # adjust connection here; if needed, add "--private-key /path" to specify an SSH private key
     ```
     - Hetzner, DigitalOcean: use `root@ip-address`
     - AWS: use `ubuntu@ip-address-or-hostname`
