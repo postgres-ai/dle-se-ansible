@@ -3,7 +3,7 @@
 - block:
     - name: Restart DLE container
       docker_container:
-        name: dblab_server
+        name: "{{ dle_container_name }}"
         image: "postgresai/dblab-server:{{ dle_version | replace('v', '') }}"
         state: started
         restart: yes

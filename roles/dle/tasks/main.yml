@@ -34,7 +34,7 @@
 - block:
     - name: Make sure that the DLE container is running
       docker_container:
-        name: dblab_server
+        name: "{{ dle_container_name }}"
         image: "postgresai/dblab-server:{{ dle_version | replace('v', '') }}"
         state: started
         privileged: true
