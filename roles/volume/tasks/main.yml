@@ -13,6 +13,15 @@
     debug:
       msg: "{{ lsblk_result.stdout }}"
 
+  # Stop, if the disk contains the root mountpoint
+  - name: Check for root mountpoint
+    fail:
+      msg:
+       - "Invalid mountpoint: '/'"
+       - "The disk contains the root file system. Please make sure that you have specified the correct disk in the zpool_disk variable."
+    when: item.mountpoint is defined and item.mountpoint == '/'
+    loop: "{{ lsblk_result.stdout }}"
+
   - name: "Umount all mountpoints for {{ zpool_disk }} (if mounted)"
     command: "umount -q {{ item.mountpoint }}"
     when: item.mountpoint is defined and item.mountpoint != None
