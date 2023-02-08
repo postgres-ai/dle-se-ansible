@@ -6,7 +6,7 @@ os_valid_distributions:
   - Debian
 
 os_minimum_versions:
-  Ubuntu: 20.04
+  Ubuntu: 18.04
   Debian: 10
 
 ...
