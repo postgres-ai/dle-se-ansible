@@ -1,13 +1,15 @@
 ---
+- name: Check if ZFS pool is already exist
+  command: "zpool status -v {{ zpool_name }}"
+  register: zpool_status
+  changed_when: false
+  failed_when: false
+  when:
+    - zpool_name is defined
+    - zpool_name | length > 0
 
-- block:  # Create zpool
-    - name: Check if ZFS pool is already exist
-      command: "zpool status -v {{ zpool_name }}"
-      register: zpool_status
-      changed_when: false
-      failed_when: false
-
-    # If zpool_disk variable is not defined, try to detected an empty disk
+# Create zpool
+- block:  # if the zpool_disk variable is not defined, try to detect an empty disk
     - name: Detect empty volume
       shell: |
         set -o pipefail;
@@ -17,7 +19,6 @@
         executable: /bin/bash
       register: zpool_volume
       changed_when: false
-      when: zpool_status.rc != 0 and zpool_disk | length < 1
 
     # Stop, if empty volume is not detected
     - name: The empty volume is not detected
@@ -25,7 +26,7 @@
         msg: "Whoops! The empty volume is not detected."
       when: zpool_volume.stdout is defined and zpool_volume.stdout | length < 1
 
-    # If zpool_disk variable is not defined and empty disk is detected, use it
+    # if empty disk is detected, use it
     - name: Create zpool (use {{ zpool_volume.stdout }})
       command: >-
         zpool create -f
@@ -35,9 +36,16 @@
         -O logbias=throughput
         -m {{ zpool_mount_dir }}/{{ zpool_name }}
         {{ zpool_name }} {{ zpool_volume.stdout }}
-      when: zpool_status.rc != 0 and (zpool_disk is not defined or zpool_disk | length < 1)
+  when:
+    - zpool_status.rc != 0
+    - zpool_name is defined
+    - zpool_mount_dir is defined
+    - zpool_disk is defined
+    - zpool_disk | length < 1
+  tags:
+    - zpool
 
-    # If zpool_disk variable is defined, use this disk
+- block:  # if the zpool_disk variable is defined, use this disk
     - name: Create zpool (use {{ zpool_disk }})
       command: >-
         zpool create -f
@@ -47,8 +55,17 @@
         -O logbias=throughput
         -m {{ zpool_mount_dir }}/{{ zpool_name }}
         {{ zpool_name }} {{ zpool_disk }}
-      when: zpool_status.rc != 0 and (zpool_disk is defined and zpool_disk | length > 0)
+  when:
+    - zpool_status.rc != 0
+    - zpool_name is defined
+    - zpool_mount_dir is defined
+    - zpool_disk is defined
+    - zpool_disk | length > 0
+  tags:
+    - zpool
 
+# Create datasets
+- block:
     - name: "Check the number of datasets for the {{ zpool_name }}"
       shell: |
         set -o pipefail;
@@ -66,8 +83,8 @@
             (zpool_status.rc == 0 and zpool_datasets_number > datasets_number_result.stdout|int)
   when:
     - zpool_name is defined
-    - zpool_mount_dir is defined
     - zpool_datasets_number is defined
   tags:
     - zpool
+    - datasets
 ...
