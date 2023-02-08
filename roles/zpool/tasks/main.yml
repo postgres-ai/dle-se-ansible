@@ -13,8 +13,8 @@
     - name: Detect empty volume
       shell: |
         set -o pipefail;
-        lsblk -e7 --output PATH,NAME,FSTYPE,TYPE --json \
-          | jq -r '.blockdevices[] | select(.children == null and .fstype == null and .type == "disk") | .path'
+        lsblk -e7 --output NAME,FSTYPE,TYPE --json \
+          | jq -r '.blockdevices[] | select(.children == null and .fstype == null and .type == "disk") | .name'
       args:
         executable: /bin/bash
       register: zpool_volume
@@ -27,7 +27,7 @@
       when: zpool_volume.stdout is defined and zpool_volume.stdout | length < 1
 
     # if empty disk is detected, use it
-    - name: Create zpool (use {{ zpool_volume.stdout }})
+    - name: Create zpool (use /dev/{{ zpool_volume.stdout }})
       command: >-
         zpool create -f
         -O compression=on
@@ -35,7 +35,7 @@
         -O recordsize=128k
         -O logbias=throughput
         -m {{ zpool_mount_dir }}/{{ zpool_name }}
-        {{ zpool_name }} {{ zpool_volume.stdout }}
+        {{ zpool_name }} /dev/{{ zpool_volume.stdout }}
   when:
     - zpool_status.rc != 0
     - zpool_name is defined
