@@ -20,7 +20,7 @@
     ansible-galaxy install -r requirements.yml
     ```
 - Edit `vars/main.yml`
-   - Pay attention to `zpool_disk` – this is a data disk. By default, it's `/dev/sdb`, there is no auto-guess logic implemented (yet)
+   - Pay attention to `zpool_disk` – this is a data disk. If not specified, an attempt will be made to automatically detect an empty volume.
        - AWS EC: in most cases, you need to use `/dev/nvme1n1` or `/dev/xvdb`
        - GCP: use `/dev/disk/by-id/xxxxxx` (check GCP Console)
        - DigitalOcean Droplets: use `/dev/sda`
