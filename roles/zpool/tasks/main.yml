@@ -56,10 +56,13 @@
       changed_when: false
 
     # Stop, if the disk contains mountpoint
-    - name: Check the disk for a mountpoint
+    # it is acceptable if the disk contains empty partitions
+    - name: Check that the disk does not contain mount points or file system
       fail:
-        msg: "The disk {{ zpool_disk }} contains mountpoint {{ item.mountpoint }}"
-      when: item.mountpoint is defined and item.mountpoint != None
+        msg:
+          - "The disk {{ zpool_disk }} is not empty (mountpoint: {{ item.mountpoint }}, fstype: {{ item.fstype }})"
+      when: (item.mountpoint is defined and item.mountpoint != None) or
+            (item.fstype is defined and item.fstype != None)
       loop: "{{ lsblk_result.stdout }}"
 
     - name: Create zpool (use {{ zpool_disk }})
