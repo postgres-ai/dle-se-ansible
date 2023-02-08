@@ -1,6 +1,4 @@
 ---
-# System
-postgres_major_version: 15
 
 # ZFS pool
 zpool_disk: ""  # specify an empty disk for the ZFS pool (e.g.: /dev/sdb). If not specified, an attempt will be made to automatically detect an empty volume.

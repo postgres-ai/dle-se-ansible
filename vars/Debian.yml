@@ -26,6 +26,6 @@ system_packages:
   - docker-ce
   - docker-ce-cli
   - containerd.io
-  - "postgresql-client-{{ postgres_major_version }}"
+  - postgresql-client
   - s3fs
   - jq
