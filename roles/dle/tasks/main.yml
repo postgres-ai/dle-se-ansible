@@ -32,7 +32,7 @@
       access_time: preserve
 
 - block:
-    - name: Start DLE container
+    - name: Make sure that the DLE container is running
       docker_container:
         name: dblab_server
         image: "postgresai/dblab-server:{{ dle_version | replace('v', '') }}"
@@ -54,6 +54,7 @@
         env:
           DOCKER_API_VERSION: "1.39"
           DLE_COMPUTING_INFRASTRUCTURE: "{{ dle_computing_infrastructure }}"
+      register: dblab_server_start
 
     - name: Wait for DLE port to be available
       wait_for:
@@ -63,6 +64,7 @@
         timeout: 60
         delay: 10
       ignore_errors: false
+      when: dblab_server_start is changed
 
     - name: Check that DLE is healthy
       uri:
