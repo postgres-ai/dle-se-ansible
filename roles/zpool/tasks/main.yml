@@ -55,14 +55,14 @@
       register: lsblk_result
       changed_when: false
 
-    # Stop, if the disk contains mountpoint
+    # Stop, if the disk contains mountpoint or file system (except when the file system type is equal to zfs_member)
     # it is acceptable if the disk contains empty partitions
     - name: Check that the disk does not contain mount points or file system
       fail:
         msg:
           - "The disk {{ zpool_disk }} is not empty (mountpoint: {{ item.mountpoint }}, fstype: {{ item.fstype }})"
       when: (item.mountpoint is defined and item.mountpoint != None) or
-            (item.fstype is defined and item.fstype != None)
+            (item.fstype is defined and (item.fstype != None and item.fstype != "zfs_member"))
       loop: "{{ lsblk_result.stdout }}"
 
     - name: Create zpool (use {{ zpool_disk }})
