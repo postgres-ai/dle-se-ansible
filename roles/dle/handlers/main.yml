@@ -1,6 +1,6 @@
 ---
 
-- name: Restart dblab_server container
+- name: Restart DLE container
   include_tasks: tasks/restart_dle.yml
   listen: "restart dblab_server"
 
