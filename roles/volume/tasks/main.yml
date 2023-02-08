@@ -3,7 +3,7 @@
   - name: "Read device information ({{ zpool_disk }})"
     shell: |
       set -o pipefail;
-      lsblk {{ zpool_disk }} --output FSTYPE,MOUNTPOINT,PATH,TYPE --json | jq -r '.blockdevices'
+      lsblk {{ zpool_disk }} --output FSTYPE,MOUNTPOINT,TYPE --json | jq -r '.blockdevices'
     args:
       executable: /bin/bash
     register: lsblk_result
