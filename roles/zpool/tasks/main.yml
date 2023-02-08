@@ -97,9 +97,9 @@
 
     - name: Create datasets
       command: zfs create "{{ zpool_name }}/{{ item }}"
-      with_sequence: start={{ datasets_number_result.stdout|int +1 }} count={{ zpool_datasets_number - datasets_number_result.stdout|int }} format=dataset_%d
-      when: (zpool_status.rc != 0 and zpool_datasets_number > 0) or
-            (zpool_status.rc == 0 and zpool_datasets_number > datasets_number_result.stdout|int)
+      with_sequence: start={{ datasets_number_result.stdout|int +1 }} count={{ zpool_datasets_number|int - datasets_number_result.stdout|int }} format=dataset_%d
+      when: (zpool_status.rc != 0 and zpool_datasets_number|int > 0) or
+            (zpool_status.rc == 0 and zpool_datasets_number|int > datasets_number_result.stdout|int)
   when:
     - zpool_name is defined
     - zpool_datasets_number is defined
