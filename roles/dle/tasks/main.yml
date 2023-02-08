@@ -50,7 +50,7 @@
           - /lib/modules:/lib/modules:ro
           - /proc:/host_proc:ro
         ports:
-          - "{{ dle_container_host }}:{{ dle_port }}:{{ dle_port }}"
+          - "{{ dle_container_host }}:{{ dle_port }}:2345"
         env:
           DOCKER_API_VERSION: "1.39"
           DLE_COMPUTING_INFRASTRUCTURE: "{{ dle_computing_infrastructure }}"
