@@ -1,7 +1,7 @@
 ## How to use
 
 ### Prepare machine
-- Get a machine with Ubuntu 22.04 (other version might work too – however, an LTS version is recommended; :warning: don't try 22.10, it won't work).
+- Get a machine with Ubuntu 22.04 (other version might work too – however, an LTS version is recommended).
 - Add an additional disk to machine, this disk should be at least 2 times bigger than DB size that will be used in DLE.
 - Machine should have your SSH public key so you can access it via SSH.
 
@@ -20,16 +20,15 @@
     ansible-galaxy install -r requirements.yml
     ```
 - Edit `vars/main.yml`
-   - If needed, change Postgres major version (`postgres_major_version`)
-   - Pay attention to `zpool_disk` – this is a data disk. By default, it's `/dev/sdb`, there is no auto-guess logic implemented (yet)
+   - Pay attention to `zpool_disk` – this is a data disk. If not specified, an attempt will be made to automatically detect an empty volume.
        - AWS EC: in most cases, you need to use `/dev/nvme1n1` or `/dev/xvdb`
        - GCP: use `/dev/disk/by-id/xxxxxx` (check GCP Console)
        - DigitalOcean Droplets: use `/dev/sda`
        - Hetzner: use `/dev/sda`
-   - Set DLE token that you'll be using (``), avoid using simple value
+   - Set DLE token that you'll be using (variable: `dle_verification_token` ), avoid using simple value
 - Run playbook to intall DLE SE on remote server:
     ```shell
-    ansible-playbook deploy_dle.yml --extra-vars working_host=user@server-ip-address # adjust connection here; if needed, add "--private-key /path" to specify an SSH private key
+    ansible-playbook deploy_dle.yml --extra-vars dle_host=user@server-ip-address # adjust connection here; if needed, add "--private-key /path" to specify an SSH private key
     ```
     - Hetzner, DigitalOcean: use `root@ip-address`
     - AWS: use `ubuntu@ip-address-or-hostname`
@@ -39,11 +38,11 @@
 - If HTTPS was not configured, then:
     - First, set up SSH port forwarding for port 2346:
         ```shell
-        ssh -N -L 2346:server-ip-address:2346 user@server-ip-address  # if needed, use -i to specify the private key
+        ssh -N -L 2346:127.0.0.1:2346 user@server-ip-address  # if needed, use -i to specify the private key
         ```
     - (optional) Set up additional SSH port forwarding for the monitoring part (Netdata), port 19999:
         ```shell
-        ssh -N -L 19999:server-ip-address:19999 user@server-ip-address # if needed, use -i to specify the private key
+        ssh -N -L 19999:127.0.0.1:19999 user@server-ip-address # if needed, use -i to specify the private key
         ```
     - Now UI should be available at http://localhost:2346, and monitoring – at http://localhost:19999
 

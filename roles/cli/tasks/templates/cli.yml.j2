@@ -1,0 +1,12 @@
+current_environment: {{ cli_environment_id }}
+environments:
+  {{ cli_environment_id }}:
+    url: http://{{ dle_container_host }}:{{ dle_port }}
+    token: {{ dle_verification_token }}
+    insecure: true
+    forwarding:
+      server_url: ""
+      local_port: ""
+      identity_file: ""
+settings:
+  tz: ""

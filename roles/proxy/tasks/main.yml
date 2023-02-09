@@ -57,9 +57,6 @@
         enabled: yes
         state: restarted
 
-    - name: Replace accessHost parameter in the DLE config
-      shell: yq e -i '.cloning.accessHost="{{ certbot_domain }}"' {{ dle_config_path }}/server.yml
-
     - name: Generate public URL
       set_fact:
         dle_public_url: "https://{{ certbot_domain }}:{{ proxy_dle_public_port }}/instance"
