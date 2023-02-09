@@ -1,4 +1,7 @@
 ---
+# Server
+provision: none  # or 'aws', 'gcp', 'azure', 'digitalocean', 'hetzner' to create a virtual machine for DLE
+
 # System
 username: "root"  # system user, owner of configuration files
 

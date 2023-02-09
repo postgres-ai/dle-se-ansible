@@ -1,5 +1,10 @@
 ---
 
+# Create a virtual machine for DLE (if provision != 'none')
+- import_playbook: provision.yml
+  when: provision | lower != 'none'
+  tags: aws, gcp, azure, digitalocean, hetzner
+
 - name: Deploy DLE
   hosts: localhost
   gather_facts: false

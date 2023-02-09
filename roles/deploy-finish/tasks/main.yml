@@ -10,7 +10,7 @@
         - "Monitoring (Netdata) local URL: http://localhost:{{ netdata_port }}"
         - "DLE public URL: {{ dle_public_url | default('Not available. The proxy server is not installed. Use SSH port forwarding to access DLE.') }}"
         - "SSH-port-forwarding:"
-        - "  - For DLE API: 'ssh -N -L {{ dle_port }}:127.0.0.1:{{ dle_port }} {{ dle_host }} -i YOUR_PRIVATE_KEY'"
-        - "  - For DLE UI: 'ssh -N -L {{ dle_ui_port }}:127.0.0.1:{{ dle_ui_port }} {{ dle_host }} -i YOUR_PRIVATE_KEY'"
-        - "  - To monitoring tool (Netdata): 'ssh -N -L {{ netdata_port }}:127.0.0.1:{{ netdata_port }} {{ dle_host }} -i YOUR_PRIVATE_KEY'"
+        - "  - For DLE API: 'ssh -N -L {{ dle_port }}:127.0.0.1:{{ dle_port }} {{ inventory_hostname }} -i YOUR_PRIVATE_KEY'"
+        - "  - For DLE UI: 'ssh -N -L {{ dle_ui_port }}:127.0.0.1:{{ dle_ui_port }} {{ inventory_hostname }} -i YOUR_PRIVATE_KEY'"
+        - "  - To monitoring tool (Netdata): 'ssh -N -L {{ netdata_port }}:127.0.0.1:{{ netdata_port }} {{ inventory_hostname }} -i YOUR_PRIVATE_KEY'"
 ...
