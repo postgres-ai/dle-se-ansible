@@ -8,6 +8,7 @@
         state: present
       delegate_to: 127.0.0.1
       run_once: true
+      when: ansible_distribution != "MacOSX"
 
     - name: Install dopy dependency on controlling host
       pip:
