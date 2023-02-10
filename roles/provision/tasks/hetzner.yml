@@ -33,7 +33,7 @@
         msg: "SSH key {{ ssh_key_name }} not found. Please make sure that the key has been added to Hetzner Cloud."
       when: ssh_keys.hcloud_ssh_key_info | length < 1
 
-    - name: "Hetzner Cloud: Create or modify server ({{ server_name }})"
+    - name: "Hetzner Cloud: Create or modify server {{ server_name }}"
       hetzner.hcloud.hcloud_server:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
         name: "{{ server_name | lower }}"
