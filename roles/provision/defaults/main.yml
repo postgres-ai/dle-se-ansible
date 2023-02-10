@@ -12,13 +12,13 @@ provision: none  # or 'aws', 'gcp', 'azure', 'digitalocean', 'hetzner' to create
 
 # DigitalOcean (if provision: digitalocean)
 ssh_key_name: my_ssh_key  # SSH key to be added to the server
-droplet_name: dblab-server
+droplet_name: dblab-server  # This is the name of the Droplet. Must be formatted by hostname rules.
 droplet_size: m-2vcpu-16gb  # Please see https://slugs.do-api.dev/ for current slugs.
-droplet_image: ubuntu-22-04-x64
+droplet_image: ubuntu-22-04-x64  # This is the slug of the image you would like the Droplet created with.
 droplet_region: sfo3  # This is the slug of the region you would like your Droplet to be created in.
 droplet_state: present  # 'present' to create or 'absent' to delete
-block_storage_name: "{{ droplet_name }}-storage"  # zpool_disk
-block_storage_region: "{{ droplet_region }}"
+block_storage_name: "{{ droplet_name }}-storage"  # This is the storage for zpool_disk
+block_storage_region: "{{ droplet_region }}"  # The same region as the droplet
 block_storage_size: 100  # The size of the Block Storage volume in gigabytes. If size > current size of the volume, the volume is resized.
 block_storage_state: "{{ droplet_state }}"  # 'present' to create or 'absent' to delete
 
