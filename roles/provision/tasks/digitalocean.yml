@@ -82,14 +82,14 @@
       - Droplet Name is {{ droplet_name }}
       - Droplet Size is {{ droplet_size }}
       - Block Storage Size is {{ block_storage_size }} gigabytes
-      - Public IP is {{ droplet_result.data.ip_address }}
-      - Private IP is {{ droplet_result.data.private_ipv4_address }}
+      - Public IP is {{ (droplet_result.data.droplet.networks.v4 | selectattr('type', 'equalto', 'public')).0.ip_address }}
+      - Private IP is {{ (droplet_result.data.droplet.networks.v4 | selectattr('type', 'equalto', 'private')).0.ip_address }}
   when: droplet_result.data is defined
 
 # set_fact: dle_host
 - name: "set_fact: dle_host (for deploy DLE)"
   set_fact:
-    dle_host: "root@{{ droplet_result.data.ip_address }}"
+    dle_host: "root@{{ (droplet_result.data.droplet.networks.v4 | selectattr('type', 'equalto', 'public')).0.ip_address }}"
   when: droplet_result.data is defined
 
 # Delete (if droplet_state or block_storage_state is absent)
