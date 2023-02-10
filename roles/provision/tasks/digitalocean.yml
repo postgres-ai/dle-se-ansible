@@ -79,6 +79,7 @@
   debug:
     msg:
       - Droplet ID is {{ droplet_result.data.droplet.id }}
+      - Droplet OS is {{ droplet_result.data.droplet.image.description }}
       - Droplet Name is {{ droplet_name }}
       - Droplet Size is {{ droplet_size }}
       - Block Storage Size is {{ block_storage_size }} gigabytes
