@@ -98,6 +98,7 @@
     oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
     state: absent
     name: "{{ droplet_name }}"
+    unique_name: true
     region: "{{ droplet_region }}"
   when: droplet_state == 'absent'
 
