@@ -39,7 +39,7 @@
         msg: "SSH key {{ ssh_key_name }} not found. Please make sure that the key has been added to DigitalOcean."
       when: ssh_key_fingerprint is not defined
 
-    - name: "DigitalOcean: Create a new Droplet ({{ droplet_name }})"
+    - name: "DigitalOcean: Create or modify a Droplet ({{ droplet_name }})"
       community.digitalocean.digital_ocean_droplet:
         oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
         state: present
@@ -53,7 +53,7 @@
       register: droplet_result
   when: droplet_state == 'present'
 
-- name: "DigitalOcean: Create a new Block Storage ({{ block_storage_name }})"
+- name: "DigitalOcean: Create or modify Block Storage ({{ block_storage_name }})"
   community.digitalocean.digital_ocean_block_storage:
     oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
     state: present
