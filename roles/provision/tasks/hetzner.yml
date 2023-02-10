@@ -1,3 +1,97 @@
 ---
+# Dependencies
+- name: Install python dependencies
+  block:
+    - name: Make sure the python3-pip package are present on controlling host
+      ansible.builtin.package:
+        name: python3-pip
+        state: present
+      delegate_to: 127.0.0.1
+      run_once: true
+      when: ansible_distribution != "MacOSX"
+
+    - name: Install hcloud dependency on controlling host
+      ansible.builtin.pip:
+        name: hcloud
+        extra_args: --user
+      delegate_to: 127.0.0.1
+      become: false
+      vars:
+        ansible_become: false
+      run_once: true
+
+# Create (if state is present)
+- block:
+    - name: "Hetzner Cloud: Ensure a SSH key {{ ssh_key_name }} is present"
+      hetzner.hcloud.hcloud_ssh_key_info:
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+        name: "{{ ssh_key_name | lower }}"
+      register: ssh_keys
+
+    - name: "Hetzner Cloud: Fail if the SSH key is not found"
+      ansible.builtin.fail:
+        msg: "SSH key {{ ssh_key_name }} not found. Please make sure that the key has been added to Hetzner Cloud."
+      when: ssh_keys.hcloud_ssh_key_info | length < 1
+
+    - name: "Hetzner Cloud: Create or modify server ({{ server_name }})"
+      hetzner.hcloud.hcloud_server:
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+        name: "{{ server_name | lower }}"
+        state: present
+        server_type: "{{ server_type | lower }}"
+        image: "{{ server_image | lower }}"
+        ssh_keys: ["{{ ssh_key_name | lower }}"]
+        location: "{{ server_location }}"
+        enable_ipv4: true
+        enable_ipv6: false
+      register: server_result
+
+    - name: "Hetzner Cloud: Add server to the network {{ network_name }}"
+      hcloud_server_network:
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+        network: "{{ network_name }}"
+        server: "{{ server_name | lower }}"
+        state: present
+      when: network_name is defined and network_name | length > 0
+
+    - name: "Hetzner Cloud: Create or modify volume for server {{ server_name }}"
+      hetzner.hcloud.hcloud_volume:
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+        name: "{{ volume_name | lower }}"
+        state: present
+        size: "{{ volume_size }}"
+        server: "{{ server_name | lower }}"
+  when: state == 'present'
+
+# Info
+- name: Show Server info
+  debug:
+    var: server_result.hcloud_server
+  when: server_result.hcloud_server is defined
+
+# set_fact: dle_host
+- name: "set_fact: dle_host (for deploy DLE)"
+  set_fact:
+    dle_host: "root@{{ server_result.hcloud_server.ipv4_address }}"
+  when: server_result.hcloud_server is defined
+
+# Delete (if state is absent)
+- block:
+    - name: "Hetzner Cloud: Delete a server {{ server_name }}"
+      hetzner.hcloud.hcloud_server:
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+        name: "{{ server_name | lower }}"
+        state: absent
+        location: "{{ server_location }}"
+      register: server_result
+      when: state == 'absent'
+
+    - name: "Hetzner Cloud: Delete a volume {{ volume_name }}"
+      hetzner.hcloud.hcloud_volume:
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+        name: "{{ volume_name | lower }}"
+        state: absent
+        location: "{{ server_location }}"
+  when: state == 'absent'
 
 ...

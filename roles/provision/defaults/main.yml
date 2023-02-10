@@ -23,6 +23,14 @@ block_storage_size: 100  # The size of the Block Storage volume in gigabytes. If
 block_storage_state: "{{ droplet_state }}"  # 'present' to create or 'absent' to delete
 
 # Hetzner Cloud (if provision: hetzner)
-# TODO
+ssh_key_name: my_ssh_key  # SSH key to be added to the server
+server_name: dblab-server  # The Name of the Hetzner Cloud server.
+server_type: ccx22  # The Server Type of the Hetzner Cloud server. Please see https://docs.hetzner.cloud/#server-types
+server_image: ubuntu-22.04  # Image the server should be created from. Please see https://docs.hetzner.cloud/#images
+server_location: ash  # This is the region where the server will be created (ash - us-east "Ashburn, VA"). Please see https://docs.hetzner.cloud/#locations
+network_name: ""  # The name of the private network. If specified, the server will be added to this network (must be created in advance).
+volume_name: "{{ server_name }}-storage"  # This is the storage for zpool_disk
+volume_size: 100  # The size of the Block Storage volume in gigabytes. If size > current size of the volume, the volume is resized.
+state: present  # 'present' to create or 'absent' to delete
 
 ...
