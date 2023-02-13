@@ -57,7 +57,7 @@
     - name: "Hetzner Cloud: Create or modify volume for server {{ server_name }}"
       hetzner.hcloud.hcloud_volume:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
-        name: "{{ volume_name | lower }}"
+        name: "{{ server_name }}-storage"
         state: present
         size: "{{ volume_size }}"
         server: "{{ server_name | lower }}"
@@ -89,7 +89,7 @@
     - name: "Hetzner Cloud: Delete a volume {{ server_name }}-storage"
       hetzner.hcloud.hcloud_volume:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
-        name: "{{ volume_name | lower }}"
+        name: "{{ server_name }}-storage"
         state: absent
         location: "{{ server_location }}"
   when: state == 'absent'
