@@ -86,7 +86,7 @@
       register: server_result
       when: state == 'absent'
 
-    - name: "Hetzner Cloud: Delete a volume {{ volume_name }}"
+    - name: "Hetzner Cloud: Delete a volume {{ server_name }}-storage"
       hetzner.hcloud.hcloud_volume:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
         name: "{{ volume_name | lower }}"

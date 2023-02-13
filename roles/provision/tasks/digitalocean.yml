@@ -53,23 +53,23 @@
       register: droplet_result
   when: state == 'present'
 
-- name: "DigitalOcean: Create or modify Block Storage ({{ volume_name }})"
+- name: "DigitalOcean: Create or modify Block Storage ({{ server_name }}-storage)"
   community.digitalocean.digital_ocean_block_storage:
     oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
     state: present
     command: create
-    volume_name: "{{ volume_name }}"
+    volume_name: "{{ server_name }}-storage"
     region: "{{ server_location }}"
     block_size: "{{ volume_size }}"
   register: block_storage_result
   when: state == 'present'
 
-- name: "DigitalOcean: Attach Block Storage {{ volume_name }} to a Droplet {{ server_name }}"
+- name: "DigitalOcean: Attach Block Storage {{ server_name }}-storage to a Droplet {{ server_name }}"
   community.digitalocean.digital_ocean_block_storage:
     oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
     state: present
     command: attach
-    volume_name: "{{ volume_name }}"
+    volume_name: "{{ server_name }}-storage"
     region: "{{ server_location }}"
     droplet_id: "{{ droplet_result.data.droplet.id }}"
   when: droplet_result.data is defined
@@ -103,12 +103,12 @@
     region: "{{ server_location }}"
   when: state == 'absent'
 
-- name: "DigitalOcean: Delete a Block Storage {{ volume_name }}"
+- name: "DigitalOcean: Delete a Block Storage {{ server_name }}-storage"
   community.digitalocean.digital_ocean_block_storage:
     oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
     state: absent
     command: create
-    volume_name: "{{ volume_name }}"
+    volume_name: "{{ server_name }}-storage"
     region: "{{ server_location }}"
   when: state == 'absent'
 
