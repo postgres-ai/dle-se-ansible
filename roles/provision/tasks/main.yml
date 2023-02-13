@@ -1,5 +1,17 @@
 ---
 
+- name: Make sure that the required variables are specified
+  fail:
+    msg:
+      - "One or more required variables have empty values."
+      - "Please specify a value for the variables: server_name, server_type, server_image, server_location, volume_size"
+  when:
+    server_name | length < 1 or
+    server_type | length < 1 or
+    server_image | length < 1 or
+    server_location | length < 1 or
+    volume_size | length < 1
+
 - name: Import tasks for AWS
   import_tasks: aws.yml
   when: provision | lower == 'aws'
