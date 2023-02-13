@@ -46,13 +46,13 @@
         enable_ipv6: false
       register: server_result
 
-    - name: "Hetzner Cloud: Add server to the network {{ network_name }}"
+    - name: "Hetzner Cloud: Add server to the network {{ server_network }}"
       hcloud_server_network:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
-        network: "{{ network_name }}"
+        network: "{{ server_network }}"
         server: "{{ server_name | lower }}"
         state: present
-      when: network_name is defined and network_name | length > 0
+      when: server_network is defined and server_network | length > 0
 
     - name: "Hetzner Cloud: Create or modify volume for server {{ server_name }}"
       hetzner.hcloud.hcloud_volume:

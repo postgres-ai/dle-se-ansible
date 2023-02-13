@@ -6,7 +6,7 @@ server_name: ""
 server_type: ""
 server_image: ""
 server_location: ""
-network_name: ""  # The name of the private network. If specified, the server will be added to this network (must be created in advance).
+server_network: ""  # The name of the private network. If specified, the server will be added to this network (must be created in advance).
 volume_size: ""  # This is the storage for zpool_disk (size in gigabytes)
 state: present  # 'present' to create or 'absent' to delete
 
