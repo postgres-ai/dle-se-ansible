@@ -1,7 +1,7 @@
 ---
 provision: none  # or 'aws', 'gcp', 'azure', 'digitalocean', 'hetzner' to create a virtual machine for DLE
 
-ssh_key_name: ""  # SSH key to be added to the server
+ssh_key_name: ""  # (previously added to the cloud) SSH key to be added to the DLE server. If not specified, all ssh keys will be added (if exists).
 server_name: ""
 server_type: ""
 server_image: ""
