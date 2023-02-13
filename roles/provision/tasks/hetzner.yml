@@ -20,19 +20,51 @@
         ansible_become: false
       run_once: true
 
-# Create (if state is present)
+# SSH key
 - block:
+    # if ssh_key_name is specified
     - name: "Hetzner Cloud: Ensure a SSH key {{ ssh_key_name }} is present"
       hetzner.hcloud.hcloud_ssh_key_info:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
         name: "{{ ssh_key_name | lower }}"
       register: ssh_keys
+      when: ssh_key_name | length > 0
 
+    # Stop, if the ssh key is not found
     - name: "Hetzner Cloud: Fail if the SSH key is not found"
       ansible.builtin.fail:
         msg: "SSH key {{ ssh_key_name }} not found. Please make sure that the key has been added to Hetzner Cloud."
-      when: ssh_keys.hcloud_ssh_key_info | length < 1
+      when:
+        - ssh_key_name | length > 0
+        - ssh_keys.hcloud_ssh_key_info | length < 1
 
+    - name: "Hetzner Cloud: set_fact ssh_key_names"
+      set_fact:
+        ssh_key_names: "{{ ssh_key_names | default([]) + [item.name] }}"
+      loop: "{{ ssh_keys.hcloud_ssh_key_info | lower }}"
+      no_log: true  # do not display the public key
+      when:
+        - ssh_key_name | length > 0
+        - ssh_keys.hcloud_ssh_key_info | length > 0
+
+    # if ssh_key_name is not specified, get the names of all ssh keys
+    - name: "Hetzner Cloud: Gather information about SSH keys"
+      hetzner.hcloud.hcloud_ssh_key_info:
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+      register: ssh_keys
+      when: ssh_key_name | length < 1
+
+    - name: "Hetzner Cloud: Get the names of all SSH keys"
+      set_fact:
+        ssh_key_names: "{{ ssh_key_names | default([]) + [item.name] }}"
+      loop: "{{ ssh_keys.hcloud_ssh_key_info | lower }}"
+      loop_control:  # do not display the public key
+        label: "{{ item.name }}"
+      when: ssh_key_name | length < 1
+  when: state == 'present'
+
+# Create (if state is present)
+- block:
     - name: "Hetzner Cloud: Create or modify server {{ server_name }}"
       hetzner.hcloud.hcloud_server:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
@@ -40,7 +72,7 @@
         state: present
         server_type: "{{ server_type | lower }}"
         image: "{{ server_image | lower }}"
-        ssh_keys: ["{{ ssh_key_name | lower }}"]
+        ssh_keys: "{{ ssh_key_names }}"
         location: "{{ server_location }}"
         enable_ipv4: true
         enable_ipv6: false
