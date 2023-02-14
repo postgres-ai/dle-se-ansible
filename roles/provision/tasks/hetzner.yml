@@ -22,8 +22,19 @@
 
 # SSH key
 - block:
+    # if ssh_key_name and ssh_key_content is specified, add this ssh key to the cloud
+    - name: "Hetzner Cloud: Add ssh key {{ ssh_key_name }} to the cloud"
+      hetzner.hcloud.hcloud_ssh_key:
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+        name: "{{ ssh_key_name }}"
+        public_key: "{{ ssh_key_content }}"
+        state: present
+      when:
+        - ssh_key_name | length > 0
+        - ssh_key_content | length > 0
+
     # if ssh_key_name is specified
-    - name: "Hetzner Cloud: Ensure a SSH key {{ ssh_key_name }} is present"
+    - name: "Hetzner Cloud: Gather information about SSH key {{ ssh_key_name }}"
       hetzner.hcloud.hcloud_ssh_key_info:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
         name: "{{ ssh_key_name | lower }}"
