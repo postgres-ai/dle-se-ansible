@@ -4,7 +4,7 @@ provision: none  # or 'aws', 'gcp', 'azure', 'digitalocean', 'hetzner' to create
 ssh_key_name: ""  # SSH key to be added to the DLE server. If not specified, all ssh keys will be added (if exists).
 ssh_key_content: ""  # (optional) if specified, the contents of the public key will be added to the cloud. Specified in a pair with the ssh_key_name variable.
 
-erver_name: ""
+server_name: ""
 server_type: ""
 server_image: ""
 server_location: ""
