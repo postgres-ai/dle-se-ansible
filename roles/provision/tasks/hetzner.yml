@@ -118,6 +118,15 @@
     dle_host: "root@{{ server_result.hcloud_server.ipv4_address }}"
   when: server_result.hcloud_server is defined
 
+- name: "Wait for the {{ dle_host }} to be available"
+  ansible.builtin.wait_for:
+    host: "{{ server_result.hcloud_server.ipv4_address }}"
+    port: 22
+    delay: 5
+    timeout: 300
+  become_user: root
+  when: server_result.hcloud_server is defined
+
 # Delete (if state is absent)
 - block:
     - name: "Hetzner Cloud: Delete a server {{ server_name }}"
