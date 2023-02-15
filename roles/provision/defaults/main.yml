@@ -1,41 +1,16 @@
 ---
 provision: none  # or 'aws', 'gcp', 'azure', 'digitalocean', 'hetzner' to create a virtual machine for DLE
 
-ssh_key_name: ""  # SSH key to be added to the DLE server. If not specified, all ssh keys will be added (if exists).
+ssh_key_name: ""  # SSH key to be added to the DLE server. If not specified, all ssh keys will be added (not applicable for aws).
 ssh_key_content: ""  # (optional) if specified, the contents of the public key will be added to the cloud. Specified in a pair with the ssh_key_name variable.
 
 server_name: ""
 server_type: ""
 server_image: ""
 server_location: ""
-server_network: ""  # The name of the private network. If specified, the server will be added to this network (must be created in advance).
+server_network: ""  # If specified, the server will be added to this network (must be created in advance).
 volume_size: ""  # This is the storage for zpool_disk (size in gigabytes)
+volume_type: ""  # (optional) The volume type.
 state: present  # 'present' to create or 'absent' to delete
-
-
-# Examples:
-
-# AWS (if provision: aws)
-# TODO
-
-# GCP (if provision: gcp)
-# TODO
-
-# Azure (if provision: azure)
-# TODO
-
-# DigitalOcean (if provision: digitalocean)
-# server_name: dblab-server  # This is the name of the Droplet. Must be formatted by hostname rules.
-# server_type: m-2vcpu-16gb  # Please see https://slugs.do-api.dev/ for current slugs.
-# server_image: ubuntu-22-04-x64  # This is the slug of the image you would like the Droplet created with.
-# server_location: sfo3  # This is the slug of the region you would like your Droplet to be created in.
-# volume_size: 100  # The size of the Block Storage volume in gigabytes. If size > current size of the volume, the volume is resized.
-
-# Hetzner Cloud (if provision: hetzner)
-# server_name: dblab-server  # The Name of the Hetzner Cloud server.
-# server_type: ccx22  # The Server Type of the Hetzner Cloud server. Please see https://docs.hetzner.cloud/#server-types
-# server_image: ubuntu-22.04  # Image the server should be created from. Please see https://docs.hetzner.cloud/#images
-# server_location: ash  # This is the region where the server will be created (ash - us-east "Ashburn, VA"). Please see https://docs.hetzner.cloud/#locations
-# volume_size: 100  # The size of the Block Storage volume in gigabytes. If size > current size of the volume, the volume is resized.
 
 ...

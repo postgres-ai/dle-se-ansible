@@ -11,7 +11,7 @@
   vars_files:
     - vars/main.yml
   vars:
-    minimal_ansible_version: 2.10.0
+    minimal_ansible_version: 2.11.0
   tasks:
     - add_host:
         name: "{{ dle_host }}"
