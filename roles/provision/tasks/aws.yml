@@ -130,14 +130,6 @@
         - ec2_result.instances[0].public_ip_address | length > 0
       retries: 30
       delay: 10
-
-    - name: Wait for the EC2 instance to be available
-      ansible.builtin.wait_for:
-        host: "{{ ec2_result.instances[0].public_ip_address }}"
-        port: 22
-        delay: 5
-        timeout: 300
-      become_user: ubuntu
   when: state == 'present'
 
 # Info
@@ -157,6 +149,15 @@
 - name: "set_fact: dle_host (for deploy DLE)"
   set_fact:
     dle_host: "ubuntu@{{ ec2_result.instances[0].public_ip_address }}"
+  when: ec2_result.instances is defined
+
+- name: "Wait for the {{ dle_host }} to be available via ssh"
+  ansible.builtin.wait_for:
+    host: "{{ ec2_result.instances[0].public_ip_address }}"
+    port: 22
+    delay: 5
+    timeout: 300
+  become_user: ubuntu
   when: ec2_result.instances is defined
 
 # Delete (if state is absent)
