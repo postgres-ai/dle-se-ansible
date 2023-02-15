@@ -121,6 +121,15 @@
     dle_host: "root@{{ (droplet_result.data.droplet.networks.v4 | selectattr('type', 'equalto', 'public')).0.ip_address }}"
   when: droplet_result.data is defined
 
+- name: "Wait for the {{ dle_host }} to be available via ssh"
+  ansible.builtin.wait_for:
+    host: "{{ (droplet_result.data.droplet.networks.v4 | selectattr('type', 'equalto', 'public')).0.ip_address }}"
+    port: 22
+    delay: 5
+    timeout: 300
+  become_user: root
+  when: droplet_result.data is defined
+
 # Delete (if state or state is absent)
 - name: "DigitalOcean: Delete a Droplet ({{ server_name }})"
   community.digitalocean.digital_ocean_droplet:
