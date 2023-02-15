@@ -137,7 +137,6 @@
         port: 22
         delay: 5
         timeout: 300
-      become: false
       become_user: ubuntu
   when: state == 'present'
 
