@@ -1,5 +1,5 @@
 ---
-- name: Provision of cloud resources (virtual machine + disk) for DLE (on {{ provision }})
+- name: Provision of cloud resources (virtual machine + disk) for DLE (on {{ provision | upper }})
   hosts: localhost
   gather_facts: true
   any_errors_fatal: true
