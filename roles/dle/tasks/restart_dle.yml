@@ -8,6 +8,7 @@
         state: started
         restart: yes
         privileged: true
+        restart_policy: unless-stopped
         container_default_behavior: "compatibility"
         volumes:
           - /var/run/docker.sock:/var/run/docker.sock
