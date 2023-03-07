@@ -13,6 +13,7 @@
     volume_size | length < 1)
 
 # if ssh_key_name is 'dle_key_tmp'
+# with each new execution of the playbook, a new temporary ssh key is created
 - name: Generate a new temporary ssh key to access the server when deploying DLE
   user:
     name: "{{ ansible_user_id }}"
