@@ -39,7 +39,7 @@
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
         name: "{{ ssh_key_name | lower }}"
       register: ssh_keys
-      when: ssh_key_name | length > 0
+      when: ssh_key_name | length > 0 and ssh_key_name != 'dle_key_tmp'
 
     # Stop, if the ssh key is not found
     - name: "Hetzner Cloud: Fail if the SSH key is not found"
@@ -47,6 +47,7 @@
         msg: "SSH key {{ ssh_key_name }} not found. Please make sure that the key has been added to Hetzner Cloud."
       when:
         - ssh_key_name | length > 0
+        - ssh_keys.hcloud_ssh_key_info is defined
         - ssh_keys.hcloud_ssh_key_info | length < 1
 
     - name: "Hetzner Cloud: set_fact ssh_key_names"
@@ -56,6 +57,7 @@
       no_log: true  # do not display the public key
       when:
         - ssh_key_name | length > 0
+        - ssh_keys.hcloud_ssh_key_info is defined
         - ssh_keys.hcloud_ssh_key_info | length > 0
 
     # if ssh_key_name is not specified, get the names of all ssh keys
@@ -63,7 +65,7 @@
       hetzner.hcloud.hcloud_ssh_key_info:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
       register: ssh_keys
-      when: ssh_key_name | length < 1
+      when: ssh_key_name | length < 1 or ssh_key_name == 'dle_key_tmp'
 
     - name: "Hetzner Cloud: Get the names of all SSH keys"
       set_fact:
@@ -71,7 +73,7 @@
       loop: "{{ ssh_keys.hcloud_ssh_key_info | lower }}"
       loop_control:  # do not display the public key
         label: "{{ item.name }}"
-      when: ssh_key_name | length < 1
+      when: ssh_key_name | length < 1 or ssh_key_name == 'dle_key_tmp'
   when: state == 'present'
 
 # Create (if state is present)
@@ -126,6 +128,16 @@
     timeout: 300
   become_user: root
   when: server_result.hcloud_server is defined
+
+# Delete the temporary ssh key from the cloud after creating the server
+- name: "Hetzner Cloud: Remove a temporary ssh key {{ ssh_key_name }} from the cloud"
+  hetzner.hcloud.hcloud_ssh_key:
+    api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+    name: "{{ ssh_key_name }}"
+    state: absent
+  when:
+    - ssh_key_name is defined
+    - ssh_key_name == 'dle_key_tmp'
 
 # Delete (if state is absent)
 - block:

@@ -160,6 +160,19 @@
   become_user: ubuntu
   when: ec2_result.instances is defined
 
+# Delete the temporary ssh key from the cloud after creating the EC2 instance
+- name: "AWS: Remove a temporary ssh key {{ ssh_key_name }} from the cloud"
+  amazon.aws.ec2_key:
+    access_key: "{{ lookup('ansible.builtin.env', 'AWS_ACCESS_KEY_ID') }}"
+    secret_key: "{{ lookup('ansible.builtin.env', 'AWS_SECRET_ACCESS_KEY') }}"
+    name: "{{ ssh_key_name }}"
+    region: "{{ server_location }}"
+    state: absent
+  register: ssh_key_result
+  when:
+    - ssh_key_name is defined
+    - ssh_key_name == 'dle_key_tmp'
+
 # Delete (if state is absent)
 - name: "AWS: Delete a EC2 instance {{ server_name }}"
   amazon.aws.ec2_instance:

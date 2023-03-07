@@ -12,6 +12,31 @@
     server_location | length < 1 or
     volume_size | length < 1)
 
+# if ssh_key_name is 'dle_key_tmp'
+- name: Generate a new temporary ssh key to access the server when deploying DLE
+  user:
+    name: "{{ ansible_user_id }}"
+    generate_ssh_key: true
+    ssh_key_bits: 2048
+    ssh_key_file: .ssh/dle_key_tmp
+    ssh_key_comment: "temporary DLE ssh key"
+    force: true
+  register: dle_key_result
+  when:
+    - ssh_key_name is defined
+    - ssh_key_name == 'dle_key_tmp'
+    - state == 'present'
+
+# set_fact: ssh_key_content
+- name: "set_fact: ssh_key_content"
+  set_fact:
+    ssh_key_content: "{{ dle_key_result.ssh_public_key }}"
+    ansible_ssh_private_key_file: "~{{ ansible_user_id }}/.ssh/dle_key_tmp"
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+  when:
+    - dle_key_result.ssh_public_key is defined
+    - dle_key_result.ssh_public_key | length > 0
+
 - name: Import tasks for AWS
   import_tasks: aws.yml
   when: provision | lower == 'aws'
