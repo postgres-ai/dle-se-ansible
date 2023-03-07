@@ -17,14 +17,12 @@ dle_base_path: "/root/.dblab"
 dle_config_path: "{{ dle_base_path }}/engine/configs"
 dle_meta_path: "{{ dle_base_path }}/engine/meta"
 dle_logs_path: "{{ dle_base_path }}/engine/logs"
-
-# Use a dataset directory for dumping data
-dle_dump_location: "{{ zpool_mount_dir }}/{{ zpool_name }}/dataset_1/dump"
-
+dle_dump_location: "{{ zpool_mount_dir }}/{{ zpool_name }}/dataset_1/dump"  # Use a dataset directory for dumping data
 dle_container_host: 127.0.0.1
 dle_container_name: dblab_server
 dle_port: 2345
 dle_version: 3.3.0
+dle_image: "postgresai/dblab-server:{{ dle_version | replace('v', '') }}"
 dle_ui_version: 1.1.6
 dle_ui_port: 2346
 
