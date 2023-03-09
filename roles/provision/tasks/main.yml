@@ -20,7 +20,7 @@
     generate_ssh_key: true
     ssh_key_bits: 2048
     ssh_key_file: .ssh/dle_key_tmp
-    ssh_key_comment: "temporary DLE ssh key"
+    ssh_key_comment: "dle_key_tmp"
     force: true
   register: dle_key_result
   when:
