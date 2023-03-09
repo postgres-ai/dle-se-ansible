@@ -80,7 +80,6 @@
 
   roles:
     # Prepare system
-    - role: authorized-keys
     - role: add-repository
     - role: packages
     - role: zpool
@@ -94,6 +93,9 @@
 
     # Monitoring
     - role: netdata
+
+    # public ssh keys
+    - role: authorized-keys
 
     # finish (connection info)
     - role: deploy-finish
