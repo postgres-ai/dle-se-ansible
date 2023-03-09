@@ -12,7 +12,7 @@
     server_location | length < 1 or
     volume_size | length < 1)
 
-# if ssh_key_name is 'dle_key_tmp'
+# if ssh_key_name is not specified
 # with each new execution of the playbook, a new temporary ssh key is created
 - name: Generate a new temporary ssh key to access the server when deploying DLE
   user:
@@ -24,9 +24,8 @@
     force: true
   register: dle_key_result
   when:
-    - ssh_key_name is defined
-    - ssh_key_name == 'dle_key_tmp'
     - state == 'present'
+    - ssh_key_name | length < 1
 
 # set_fact: ssh_key_content
 - name: "set_fact: ssh_key_content"
