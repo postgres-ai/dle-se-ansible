@@ -80,6 +80,7 @@
 
   roles:
     # Prepare system
+    - role: authorized-keys
     - role: add-repository
     - role: packages
     - role: zpool
