@@ -27,9 +27,10 @@
     - state == 'present'
     - ssh_key_name | length < 1
 
-# set_fact: ssh_key_content
-- name: "set_fact: ssh_key_content"
+# set_fact: ssh_key_name and ssh_key_content
+- name: "set_fact: ssh_key_name and ssh_key_content"
   set_fact:
+    ssh_key_name: "dle_key_tmp"
     ssh_key_content: "{{ dle_key_result.ssh_public_key }}"
     ansible_ssh_private_key_file: "~{{ ansible_user_id }}/.ssh/dle_key_tmp"
     ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
