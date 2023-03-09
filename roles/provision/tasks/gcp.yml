@@ -57,7 +57,7 @@
               disk_size_gb: 40  # system disk size
           - device_name: "{{ server_name }}-storage"
             auto_delete: true
-            type: "{{ volume_type | default('pd-standard') }}"
+            type: "{{ volume_type | default('pd-ssd') }}"
             initialize_params:
               disk_name: "{{ server_name }}-storage"
               disk_size_gb: "{{ volume_size }}"
