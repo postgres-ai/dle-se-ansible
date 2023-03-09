@@ -149,6 +149,10 @@
     name: "{{ server_name }}"
     unique_name: true
     region: "{{ server_location }}"
+  register: droplet_absent
+  until: not droplet_absent.failed
+  retries: 3
+  delay: 5
   when: state == 'absent'
 
 - name: "DigitalOcean: Delete a Block Storage {{ server_name }}-storage"
@@ -158,6 +162,10 @@
     command: create
     volume_name: "{{ server_name }}-storage"
     region: "{{ server_location }}"
+  register: block_storage_absent
+  until: not block_storage_absent.failed
+  retries: 3
+  delay: 5
   when: state == 'absent'
 
 ...
