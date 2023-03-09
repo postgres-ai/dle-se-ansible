@@ -1,5 +1,6 @@
 ---
 - name: Get the system username
+  become: false
   command: whoami
   register: system_user
   changed_when: false
