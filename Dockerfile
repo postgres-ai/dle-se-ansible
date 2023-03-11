@@ -6,7 +6,7 @@ USER root
 RUN apt-get clean && rm -rf /var/lib/apt/lists/partial \
     && apt-get update -o Acquire::CompressionTypes::Order::=gz \
     && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
-       ca-certificates gnupg git python3 python3-pip
+       ca-certificates gnupg git python3 python3-pip keychain
 
 # clone dle-se-ansible repository
 RUN git clone https://gitlab.com/postgres-ai/dle-se-ansible.git /dle-se-ansible
