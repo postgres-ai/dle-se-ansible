@@ -25,5 +25,6 @@ RUN apt-get autoremove -y --purge gnupg git \
 
 # set environment variable for Ansible collections paths
 ENV ANSIBLE_COLLECTIONS_PATHS=/usr/lib/python3/dist-packages/ansible_collections
+ENV USER=root
 
 WORKDIR /dle-se-ansible
