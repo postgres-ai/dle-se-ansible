@@ -1,9 +1,9 @@
 ---
 # Install a role at a specific tag from GitHub
 roles:
-- name: geerlingguy.certbot
-  src: https://github.com/geerlingguy/ansible-role-certbot
-  version: 5.0.2
+  - name: geerlingguy.certbot
+    src: https://github.com/geerlingguy/ansible-role-certbot
+    version: 5.0.2
 
 collections:
   - name: amazon.aws
