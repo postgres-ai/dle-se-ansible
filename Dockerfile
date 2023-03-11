@@ -12,7 +12,8 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/partial \
 RUN git clone https://gitlab.com/postgres-ai/dle-se-ansible.git /dle-se-ansible
 
 # install ansible (latest version)
-RUN pip3 install ansible
+RUN pip3 install ansible \
+    boto3 dopy google-auth hcloud
 
 # install requirements
 RUN cd dle-se-ansible && \
