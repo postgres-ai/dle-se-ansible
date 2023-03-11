@@ -2,3 +2,7 @@
 - name: geerlingguy.certbot
   src: https://github.com/geerlingguy/ansible-role-certbot
   version: 5.0.2
+
+collections:
+  - name: amazon.aws
+    version: 5.3.0
