@@ -8,8 +8,8 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/partial \
     && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
        ca-certificates gnupg git python3 python3-pip keychain
 
-# clone dle-se-ansible repository
-RUN git clone https://gitlab.com/postgres-ai/dle-se-ansible.git /dle-se-ansible
+# copy dle-se-ansible repository
+ADD . /dle-se-ansible
 
 # install ansible (latest version)
 RUN pip3 install ansible \
