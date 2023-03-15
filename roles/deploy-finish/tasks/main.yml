@@ -7,6 +7,7 @@
       msg:
         - "DLE Server local URL: http://localhost:{{ dle_port }}"
         - "DLE UI local URL: http://localhost:{{ dle_ui_port }}"
+        - "DLE verification token: {{ dle_verification_token }}"
         - "Monitoring (Netdata) local URL: http://localhost:{{ netdata_port }}"
         - "DLE public URL: {{ dle_public_url | default('Not available. The proxy server is not installed. Use SSH port forwarding to access DLE.') }}"
         - "SSH-port-forwarding:"
