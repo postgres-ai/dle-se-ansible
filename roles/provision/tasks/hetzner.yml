@@ -39,7 +39,7 @@
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
         name: "{{ ssh_key_name | lower }}"
       register: ssh_keys
-      when: ssh_key_name | length > 0 and ssh_key_name != 'dle_key_tmp'
+      when: ssh_key_name | length > 0
 
     # Stop, if the ssh key is not found
     - name: "Hetzner Cloud: Fail if the SSH key is not found"
@@ -60,12 +60,15 @@
         - ssh_keys.hcloud_ssh_key_info is defined
         - ssh_keys.hcloud_ssh_key_info | length > 0
 
-    # if ssh_key_name is not specified, get the names of all ssh keys
+    # if ssh_key_name is not specified, and ssh_public_keys is not defined
+    # get the names of all ssh keys
     - name: "Hetzner Cloud: Gather information about SSH keys"
       hetzner.hcloud.hcloud_ssh_key_info:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
       register: ssh_keys
-      when: ssh_key_name | length < 1 or ssh_key_name == 'dle_key_tmp'
+      when:
+        - (ssh_key_name | length < 1 or ssh_key_name == 'dle_key_tmp')
+        - (ssh_public_keys is not defined or ssh_public_keys | length < 1)
 
     - name: "Hetzner Cloud: Get the names of all SSH keys"
       set_fact:
@@ -73,7 +76,9 @@
       loop: "{{ ssh_keys.hcloud_ssh_key_info | lower }}"
       loop_control:  # do not display the public key
         label: "{{ item.name }}"
-      when: ssh_key_name | length < 1 or ssh_key_name == 'dle_key_tmp'
+      when:
+        - (ssh_key_name | length < 1 or ssh_key_name == 'dle_key_tmp')
+        - (ssh_public_keys is not defined or ssh_public_keys | length < 1)
   when: state == 'present'
 
 # Create (if state is present)
