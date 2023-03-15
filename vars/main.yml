@@ -25,6 +25,7 @@ dle_version: 3.3.0
 dle_image: "postgresai/dblab-server:{{ dle_version | replace('v', '') }}"
 dle_ui_version: 1.1.6
 dle_ui_port: 2346
+dle_platform_project_name: ""  # Project name
 dle_platform_org_key: ""  # Organization key
 dle_computing_infrastructure: "do"
 
