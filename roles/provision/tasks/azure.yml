@@ -1,3 +1,181 @@
 ---
+# DRAFT (not tested)
+
+# Dependencies
+- name: Install python dependencies
+  block:
+    - name: Make sure the python3-pip package are present on controlling host
+      ansible.builtin.package:
+        name: python3-pip
+        state: present
+      when: ansible_distribution != "MacOSX"
+
+    - name: Check if the Azure collection are installed
+      command: ansible-galaxy collection list azure.azcollection
+      changed_when: false
+      failed_when: false
+      register: azcollection_result
+
+    - name: Azure collection not installed
+      fail:
+        msg:
+          - "Please install Azure collection"
+          - "ansible-galaxy collection install azure.azcollection"
+      when:
+        - azcollection_result.stderr is search("unable to find")
+
+    - name: Get ansible_collections path
+      command: ansible-galaxy collection list | grep ansible_collections
+      register: collections_path
+
+    - name: Install Azure collection requirements
+      pip:
+        requirements: "{{ collections_path.stdout.split()[-1] }}/azure/azcollection/requirements-azure.txt"
+        executable: pip3
+        extra_args: "--trusted-host=pypi.python.org --trusted-host=pypi.org --trusted-host=files.pythonhosted.org"
+        umask: "0022"
+  delegate_to: 127.0.0.1
+  become: false
+  run_once: true
+
+# Create (if state is present)
+- name: "Azure: Create DLE resource group"
+  azure.azcollection.azure_rm_resourcegroup:
+    name: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
+    location: "{{ server_location }}"
+
+- name: "Azure: Create DLE virtual network"
+  azure.azcollection.azure_rm_virtualnetwork:
+    resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
+    name: "{{ azure_virtualnetwork | default('DLEnetwork') }}"
+    address_prefixes: "10.0.0.0/16"
+
+- name: "Azure: Create DLE subnet"
+  azure.azcollection.azure_rm_subnet:
+    resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
+    name: "{{ azure_subnet | default('DLEnetworkSubnet') }}"
+    address_prefix: "10.0.1.0/24"
+    virtual_network: "{{ azure_virtualnetwork | default('DLEnetwork') }}"
+
+- name: "Azure: Create public IP address (for VM {{ server_name }})"
+  azure.azcollection.azure_rm_publicipaddress:
+    resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
+    allocation_method: static
+    name: "{{ azure_publicipaddress | default('DLEPublicIP') }}"
+  register: public_ip_result
+
+- name: "Azure: Create DLE Network Security Group"
+  azure.azcollection.azure_rm_securitygroup:
+    resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
+    name: "{{ azure_securitygroup | default('DLENetworkSecurityGroup') }}"
+    rules:
+      - name: SSH
+        protocol: Tcp
+        destination_port_range:
+          - 22
+          - "{{ proxy_dle_public_port }}"
+          - "{{ dle_port }}"
+          - "{{ dle_ui_port }}"
+          - "{{ netdata_port }}"
+        access: Allow
+        priority: 1001
+        direction: Inbound
+
+- name: "Azure: Create network interface (for VM {{ server_name }})"
+  azure.azcollection.azure_rm_networkinterface:
+    resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
+    name: "{{ azure_networkinterface | default('DLEnic') }}"
+    virtual_network: "{{ azure_virtualnetwork | default('DLEnetwork') }}"
+    subnet: "{{ azure_subnet | default('DLEnetworkSubnet') }}"
+    public_ip_name: "{{ azure_publicipaddress | default('DLEPublicIP') }}"
+    security_group: "{{ azure_securitygroup | default('DLENetworkSecurityGroup') }}"
+
+- name: "Azure: Create a virtual machine {{ server_name }}"
+  azure.azcollection.azure_rm_virtualmachine:
+    resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
+    name: "{{ server_name | lower }}"
+    vm_size: "{{ server_type }}"
+    admin_username: root
+    ssh_password_enabled: false
+    ssh_public_keys:
+      - path: /root/.ssh/authorized_keys
+        key_data: "{{ ssh_key_content }}"
+    network_interfaces: "{{ azure_networkinterface | default('DLEnic') }}"
+    os_type: Linux
+    image:
+      offer: "{{ azure_vm_image_offer | default('0001-com-ubuntu-server-focal') }}"
+      publisher: "{{ azure_vm_image_publisher | default('canonical') }}"
+      sku: "{{ azure_vm_image_sku | default('{{ server_image }}') }}"
+      version: "{{ azure_vm_image_version | default('latest') }}"
+    data_disks:
+      - lun: 0
+        disk_size_gb: "{{ volume_size }}"
+        managed_disk_type: "{{ volume_type | default('{{ StandardSSD_LRS }}') }}"
+    register: virtualmachine_result
+
+# Info
+- name: Show virtual machine info
+  debug:
+    var: virtualmachine_result
+  when: virtualmachine_result is defined
+
+# set_fact: dle_host
+- name: "set_fact: dle_host (for deploy DLE)"
+  set_fact:
+    dle_host: "root@{{ public_ip_result.state.ip_address }}"
+  when: public_ip_result.state.ip_address is defined
+
+- name: "Wait for the {{ dle_host }} to be available via ssh"
+  ansible.builtin.wait_for:
+    host: "{{ public_ip_result.state.ip_address }}"
+    port: 22
+    delay: 5
+    timeout: 300
+  become_user: root
+  when: public_ip_result.state.ip_address is defined
+
+# Delete (if state is absent)
+- block:
+    - name: "Azure: Delete DLE virtual machine ({{ server_name }})"
+      azure.azcollection.azure_rm_virtualmachine:
+        resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
+        name: "{{ server_name | lower }}"
+        state: absent
+
+    - name: "Azure: Delete DLE network interface"
+      azure.azcollection.azure_rm_networkinterface:
+        resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
+        name: "{{ azure_networkinterface | default('DLEnic') }}"
+        state: absent
+
+    - name: "Azure: Delete DLE Network Security Group"
+      azure.azcollection.azure_rm_securitygroup:
+        resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
+        name: "{{ azure_securitygroup | default('DLENetworkSecurityGroup') }}"
+        state: absent
+
+    - name: "Azure: Delete DLE Public IP"
+      azure.azcollection.azure_rm_publicipaddress:
+        resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
+        name: "{{ azure_publicipaddress | default('DLEPublicIP') }}"
+        state: absent
+
+    - name: "Azure: Delete DLE subnet"
+      azure.azcollection.azure_rm_subnet:
+        resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
+        name: "{{ azure_subnet | default('DLEnetworkSubnet') }}"
+        state: absent
+
+    - name: "Azure: Delete DLE virtual network"
+      azure.azcollection.azure_rm_virtualnetwork:
+        resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
+        name: "{{ azure_virtualnetwork | default('DLEnetwork') }}"
+        state: absent
+
+    - name: "Azure: Delete DLE resource group"
+      azure.azcollection.azure_rm_resourcegroup:
+        name: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
+        state: absent
+  when: state == 'absent'
 
 ...
