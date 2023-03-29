@@ -39,13 +39,16 @@
       register: ssh_keys
 
     # if ssh_key_name is specified, get the fingerprint of one ssh key
+    # or if dle_key_tmp is used and ssh_public_keys is difined
     - name: "DigitalOcean: Get Fingerprint for SSH key {{ ssh_key_name }}"
       set_fact:
         ssh_key_fingerprint: "{{ [item.fingerprint] }}"
-      no_log: true  # do not display the public key
       loop: "{{ ssh_keys.data | lower }}"
+      loop_control:  # do not display the public key
+        label: "{{ item.name }}"
       when:
-        - ssh_key_name | length > 0
+        - ((ssh_key_name | length > 0 and ssh_key_name != 'dle_key_tmp') or
+           (ssh_key_name == 'dle_key_tmp' and ssh_public_keys | default('') | length > 0))
         - item.name == ssh_key_name | lower
 
     # Stop, if the ssh key is not found
