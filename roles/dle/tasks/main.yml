@@ -12,6 +12,20 @@
     loop_control:
       loop_var: dir_item
 
+  # if dle_config_file is defined, copy the server.yml file
+  - name: Copy DLE configuration file to "{{ dle_config_path }}/server.yml"
+    copy:
+      src: "{{ dle_config_file }}"
+      dest: "{{ dle_config_path }}/server.yml"
+      owner: "{{ username }}"
+      group: "{{ username }}"
+      mode: 0644
+    notify: "restart dblab_server"
+    when:
+      - dle_config_file is defined
+      - dle_config_file | length > 0
+
+  # if dle_config_file is not defined, generate a new server.yml from the jinja template
   - name: Generate DLE configuration file "{{ dle_config_path }}/server.yml"
     template:
       src: templates/server.yml.j2
@@ -20,6 +34,8 @@
       group: "{{ username }}"
       mode: 0644
     notify: "restart dblab_server"
+    when: dle_config_file is not defined or
+          dle_config_file | length < 1
 
   - name: Create pending.retrieval
     file:
@@ -30,12 +46,14 @@
       mode: u=rw,g=rw,o=rw
       modification_time: preserve
       access_time: preserve
+    when: dle_config_file is not defined or
+          dle_config_file | length < 1
 
 - block:
     - name: Make sure that the DLE container is running
       docker_container:
         name: "{{ dle_container_name }}"
-        image: "postgresai/dblab-server:{{ dle_version | replace('v', '') }}"
+        image: "{{ dle_image }}"
         state: started
         privileged: true
         restart_policy: unless-stopped

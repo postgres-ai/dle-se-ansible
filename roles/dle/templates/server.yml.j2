@@ -58,6 +58,7 @@ global:
     # Default database name.
     dbname: postgres
 
+{% if dle_version | replace('v', '') is version('3.3.0', '<=') %}
   # Telemetry: anonymous statistics sent to Postgres.ai.
   # Used to analyze DLE usage, it helps the DLE maintainers make decisions on product development.
   # Please leave it enabled if possible – this will contribute to DLE development.
@@ -66,6 +67,7 @@ global:
     enabled: true
     # Telemetry API URL. To send anonymous telemetry data, keep it default ("https://postgres.ai/api/general").
     url: "https://postgres.ai/api/general"
+{% endif %}
 
 # Manages filesystem pools (in the case of ZFS) or volume groups.
 poolManager:
@@ -370,11 +372,40 @@ diagnostic:
 # Postgres.ai Platform integration (provides GUI) – extends the open source offering.
 # Uncomment the following lines if you need GUI, personal tokens, audit logs, more.
 #
+{% if dle_platform_project_name | length > 0 or dle_platform_org_key | length > 0 %}
+platform:
+  # Platform API URL. To work with Postgres.ai SaaS, keep it default
+  # ("https://postgres.ai/api/general").
+  url: "https://postgres.ai/api/general"
+  # Telemetry: anonymous statistics sent to Postgres.ai.
+  # Used to analyze DLE usage, it helps the DLE maintainers make decisions on product development.
+  # Please leave it enabled if possible – this will contribute to DLE development.
+  # The full list of data points being collected: https://postgres.ai/docs/database-lab/telemetry
+  enableTelemetry: true
+
+  # Project name
+  projectName: "{{ dle_platform_project_name }}"
+
+  # Organization key
+  orgKey: "{{ dle_platform_org_key }}"
+{% else %}
 #platform:
-#  # Platform API URL. To work with Postgres.ai SaaS, keep it default
-#  # ("https://postgres.ai/api/general").
+  # Platform API URL. To work with Postgres.ai SaaS, keep it default
+  # ("https://postgres.ai/api/general").
 #  url: "https://postgres.ai/api/general"
+  # Telemetry: anonymous statistics sent to Postgres.ai.
+  # Used to analyze DLE usage, it helps the DLE maintainers make decisions on product development.
+  # Please leave it enabled if possible – this will contribute to DLE development.
+  # The full list of data points being collected: https://postgres.ai/docs/database-lab/telemetry
+#  enableTelemetry: true
 #
+#  # Project name
+#  projectName: "project_name"
+#
+#  # Organization key
+#  orgKey: "org_key"
+#
+{% endif %}
 #  # Token for authorization in Platform API. This token can be obtained on
 #  # the Postgres.ai Console: https://postgres.ai/console/YOUR_ORG_NAME/tokens
 #  # This token needs to be kept in secret, known only to the administrator.

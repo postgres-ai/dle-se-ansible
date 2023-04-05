@@ -1,0 +1,66 @@
+---
+
+- name: Make sure that the required variables are specified
+  fail:
+    msg:
+      - "One or more required variables have empty values."
+      - "Please specify a value for the variables: server_name, server_type, server_image, server_location, volume_size"
+  when: state == 'present' and
+    (server_name | length < 1 or
+    server_type | length < 1 or
+    server_image | length < 1 or
+    server_location | length < 1 or
+    volume_size | length < 1)
+
+# if ssh_key_name is not specified
+# with each new execution of the playbook, a new temporary ssh key is created
+- name: Generate a new temporary ssh key to access the server when deploying DLE
+  user:
+    name: "{{ lookup('env', 'USER') }}"
+    generate_ssh_key: true
+    ssh_key_bits: 2048
+    ssh_key_file: .ssh/dle_key_tmp
+    ssh_key_comment: "dle_key_tmp"
+    force: true
+  register: dle_key_result
+  when:
+    - state == 'present'
+    - ssh_key_name | length < 1
+    - ssh_key_content | length < 1
+
+# set_fact: ssh_key_name and ssh_key_content
+- name: "set_fact: ssh_key_name and ssh_key_content"
+  set_fact:
+    ssh_key_name: "dle_key_tmp"
+    ssh_key_content: "{{ dle_key_result.ssh_public_key }}"
+  when:
+    - dle_key_result.ssh_public_key is defined
+    - dle_key_result.ssh_public_key | length > 0
+
+- name: Import tasks for AWS
+  import_tasks: aws.yml
+  when: provision | lower == 'aws'
+  tags: aws
+
+- name: Import tasks for GCP
+  import_tasks: gcp.yml
+  when: provision | lower == 'gcp'
+  tags: gcp
+
+- name: Import tasks for Azure
+  import_tasks: azure.yml
+  when: provision | lower == 'azure'
+  tags: azure
+
+- name: Import tasks for DigitalOcean
+  import_tasks: digitalocean.yml
+  when: provision | lower == 'digitalocean'
+        or provision | lower == 'do'
+  tags: digitalocean, do
+
+- name: Import tasks for Hetzner Cloud
+  import_tasks: hetzner.yml
+  when: provision | lower == 'hetzner'
+  tags: hetzner
+
+...
