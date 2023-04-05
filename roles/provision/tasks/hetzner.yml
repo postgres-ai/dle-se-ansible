@@ -1,0 +1,166 @@
+---
+# Dependencies
+- name: Install python dependencies
+  block:
+    - name: Make sure the python3-pip package are present on controlling host
+      ansible.builtin.package:
+        name: python3-pip
+        state: present
+      delegate_to: 127.0.0.1
+      run_once: true
+      when: ansible_distribution != "MacOSX"
+
+    - name: Install hcloud dependency on controlling host
+      ansible.builtin.pip:
+        name: hcloud
+        extra_args: --user
+      delegate_to: 127.0.0.1
+      become: false
+      vars:
+        ansible_become: false
+      run_once: true
+
+# SSH key
+- block:
+    # if ssh_key_name and ssh_key_content is specified, add this ssh key to the cloud
+    - name: "Hetzner Cloud: Add ssh key {{ ssh_key_name }} to the cloud"
+      hetzner.hcloud.hcloud_ssh_key:
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+        name: "{{ ssh_key_name }}"
+        public_key: "{{ ssh_key_content }}"
+        state: present
+      when:
+        - ssh_key_name | length > 0
+        - ssh_key_content | length > 0
+
+    # if ssh_key_name is specified
+    - name: "Hetzner Cloud: Gather information about SSH key {{ ssh_key_name }}"
+      hetzner.hcloud.hcloud_ssh_key_info:
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+        name: "{{ ssh_key_name | lower }}"
+      register: ssh_keys
+      when: ssh_key_name | length > 0
+
+    # Stop, if the ssh key is not found
+    - name: "Hetzner Cloud: Fail if the SSH key is not found"
+      ansible.builtin.fail:
+        msg: "SSH key {{ ssh_key_name }} not found. Please make sure that the key has been added to Hetzner Cloud."
+      when:
+        - ssh_key_name | length > 0
+        - ssh_keys.hcloud_ssh_key_info is defined
+        - ssh_keys.hcloud_ssh_key_info | length < 1
+
+    - name: "Hetzner Cloud: set_fact ssh_key_names"
+      set_fact:
+        ssh_key_names: "{{ ssh_key_names | default([]) + [item.name] }}"
+      loop: "{{ ssh_keys.hcloud_ssh_key_info | lower }}"
+      no_log: true  # do not display the public key
+      when:
+        - ssh_key_name | length > 0
+        - ssh_keys.hcloud_ssh_key_info is defined
+        - ssh_keys.hcloud_ssh_key_info | length > 0
+
+    # if ssh_key_name is not specified, and ssh_public_keys is not defined
+    # get the names of all ssh keys
+    - name: "Hetzner Cloud: Gather information about SSH keys"
+      hetzner.hcloud.hcloud_ssh_key_info:
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+      register: ssh_keys
+      when:
+        - (ssh_key_name | length < 1 or ssh_key_name == 'dle_key_tmp')
+        - (ssh_public_keys is not defined or ssh_public_keys | length < 1)
+
+    - name: "Hetzner Cloud: Get the names of all SSH keys"
+      set_fact:
+        ssh_key_names: "{{ ssh_key_names | default([]) + [item.name] }}"
+      loop: "{{ ssh_keys.hcloud_ssh_key_info | lower }}"
+      loop_control:  # do not display the public key
+        label: "{{ item.name }}"
+      when:
+        - (ssh_key_name | length < 1 or ssh_key_name == 'dle_key_tmp')
+        - (ssh_public_keys is not defined or ssh_public_keys | length < 1)
+  when: state == 'present'
+
+# Create (if state is present)
+- block:
+    - name: "Hetzner Cloud: Create or modify server {{ server_name }}"
+      hetzner.hcloud.hcloud_server:
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+        name: "{{ server_name | lower }}"
+        state: present
+        server_type: "{{ server_type | lower }}"
+        image: "{{ server_image | lower }}"
+        ssh_keys: "{{ ssh_key_names }}"
+        location: "{{ server_location }}"
+        enable_ipv4: true
+        enable_ipv6: false
+      register: server_result
+
+    - name: "Hetzner Cloud: Add server to the network {{ server_network }}"
+      hcloud_server_network:
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+        network: "{{ server_network }}"
+        server: "{{ server_name | lower }}"
+        state: present
+      when: server_network is defined and server_network | length > 0
+
+    - name: "Hetzner Cloud: Create or modify volume for server {{ server_name }}"
+      hetzner.hcloud.hcloud_volume:
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+        name: "{{ server_name }}-storage"
+        state: present
+        size: "{{ volume_size }}"
+        server: "{{ server_name | lower }}"
+  when: state == 'present'
+
+# Info
+- name: Show Server info
+  debug:
+    var: server_result.hcloud_server
+  when: server_result.hcloud_server is defined
+
+# set_fact: dle_host
+- name: "set_fact: dle_host (for deploy DLE)"
+  set_fact:
+    dle_host: "root@{{ server_result.hcloud_server.ipv4_address }}"
+  when: server_result.hcloud_server is defined
+
+- name: "Wait for the {{ dle_host }} to be available via ssh"
+  ansible.builtin.wait_for:
+    host: "{{ server_result.hcloud_server.ipv4_address }}"
+    port: 22
+    delay: 5
+    timeout: 300
+  become_user: root
+  when: server_result.hcloud_server is defined
+
+# Delete the temporary ssh key from the cloud after creating the server
+- name: "Hetzner Cloud: Remove a temporary ssh key {{ ssh_key_name }} from the cloud"
+  hetzner.hcloud.hcloud_ssh_key:
+    api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+    name: "{{ ssh_key_name }}"
+    state: absent
+  when:
+    - ssh_key_name is defined
+    - ssh_key_name == 'dle_key_tmp'
+
+# Delete (if state is absent)
+- block:
+    - name: "Hetzner Cloud: Delete a server {{ server_name }}"
+      hetzner.hcloud.hcloud_server:
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+        name: "{{ server_name | lower }}"
+        state: absent
+        location: "{{ server_location }}"
+      register: server_result
+      when: state == 'absent'
+
+    - name: "Hetzner Cloud: Delete a volume {{ server_name }}-storage"
+      hetzner.hcloud.hcloud_volume:
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+        name: "{{ server_name }}-storage"
+        state: absent
+        location: "{{ server_location }}"
+  when: state == 'absent'
+
+...

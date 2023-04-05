@@ -1,0 +1,117 @@
+---
+# Dependencies
+- name: Install python dependencies
+  block:
+    - name: Make sure the python3-pip package are present on controlling host
+      ansible.builtin.package:
+        name: python3-pip
+        state: present
+      delegate_to: 127.0.0.1
+      run_once: true
+      when: ansible_distribution != "MacOSX"
+
+    - name: Install google-auth dependency on controlling host
+      ansible.builtin.pip:
+        name: google-auth
+        extra_args: --user
+      delegate_to: 127.0.0.1
+      become: false
+      vars:
+        ansible_become: false
+      run_once: true
+
+# Project info
+- name: "GCP: Gather information about project"
+  google.cloud.gcp_resourcemanager_project_info:
+    auth_kind: serviceaccount
+    service_account_contents: "{{ lookup('ansible.builtin.env', 'GCP_SERVICE_ACCOUNT_CONTENTS') }}"
+  register: project_info
+  when: gcp_project is not defined or gcp_project | length < 1
+
+# Create (if state is present)
+- block:
+    # if ssh_key_content is not defined, get the user public key from the system (if exists)
+    - name: "GCP: set_fact ssh_key_content"
+      set_fact:
+        ssh_key_content: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+      no_log: true  # do not display the public key
+      when: ssh_key_content is not defined or
+            ssh_key_content | length < 1
+
+    - name: "GCP: Create or modify a instance {{ server_name }}"
+      google.cloud.gcp_compute_instance:
+        auth_kind: serviceaccount
+        service_account_contents: "{{ lookup('ansible.builtin.env', 'GCP_SERVICE_ACCOUNT_CONTENTS') }}"
+        project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
+        zone: "{{ server_location }}"
+        name: "{{ server_name | lower }}"
+        machine_type: "{{ server_type }}"
+        disks:
+          - device_name: "{{ server_name }}-system"
+            auto_delete: true
+            boot: true
+            type: "{{ volume_type | default('pd-standard') }}"
+            initialize_params:
+              disk_name: "{{ server_name }}-system"
+              source_image: "{{ server_image }}"
+              disk_size_gb: 40  # system disk size
+          - device_name: "{{ server_name }}-storage"
+            auto_delete: true
+            type: "{{ volume_type | default('pd-ssd') }}"
+            initialize_params:
+              disk_name: "{{ server_name }}-storage"
+              disk_size_gb: "{{ volume_size }}"
+        network_interfaces:
+          - network:
+              selfLink: global/networks/default
+            access_configs:
+              - name: External NAT
+                type: ONE_TO_ONE_NAT
+        metadata:
+          ssh-keys: "root:{{ ssh_key_content }}"
+        status: "{{ instance.status | default(omit) }}"
+        state: present
+      register: server_result
+  when: state == 'present'
+
+# Info
+- name: Show GCP instance info
+  debug:
+    msg:
+      - instance ID is {{ server_result.id }}
+      - instance Name is {{ server_result.name }}
+      - instance Image is {{ server_result.disks[0].licenses[0] | basename }}
+      - instance Type is {{ server_result.machineType | basename }}
+      - Block Storage Size is {{ volume_size }} gigabytes
+      - Public IP is {{ server_result.networkInterfaces[0].accessConfigs[0].natIP }}
+      - Private IP is {{ server_result.networkInterfaces[0].networkIP }}
+  when: server_result.id is defined
+
+# set_fact: dle_host
+- name: "set_fact: dle_host (for deploy DLE)"
+  set_fact:
+    dle_host: "root@{{ server_result.networkInterfaces[0].accessConfigs[0].natIP }}"
+  when: server_result.networkInterfaces is defined
+
+- name: "Wait for the {{ dle_host }} to be available via ssh"
+  ansible.builtin.wait_for:
+    host: "{{ server_result.networkInterfaces[0].accessConfigs[0].natIP }}"
+    port: 22
+    delay: 5
+    timeout: 300
+  become_user: root
+  when: server_result.networkInterfaces is defined
+
+# Delete (if state is absent)
+- block:
+    - name: "GCP: Delete a instance {{ server_name }}"
+      google.cloud.gcp_compute_instance:
+        auth_kind: serviceaccount
+        service_account_contents: "{{ lookup('ansible.builtin.env', 'GCP_SERVICE_ACCOUNT_CONTENTS') }}"
+        project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
+        zone: "{{ server_location }}"
+        name: "{{ server_name | lower }}"
+        state: absent
+  when: state == 'absent'
+
+...
