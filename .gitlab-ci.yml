@@ -1,0 +1,25 @@
+image: docker:20.10.22
+
+variables: 
+  # If you're using GitLab Runner 12.7 or earlier with the Kubernetes executor and Kubernetes 1.6 or earlier,
+  # the variable must be set to tcp://localhost:2375 because of how the Kubernetes executor connects services to the job container
+  # https://docs.gitlab.com/ee/ci/docker/using_docker_build.html#docker-in-docker-with-tls-disabled-in-the-docker-executor
+  DOCKER_HOST: tcp://docker:2375
+  DOCKER_TLS_CERTDIR: ""
+
+services:
+  - name: docker:20.10.22-dind
+    alias: docker
+    command: ["--tls=false"]
+
+before_script:
+  - docker info
+  - apk update
+  - apk add --no-cache git
+
+build:
+  stage: build
+  script:
+    - echo "${DOCKER_REGISTRY_PASSWORD}" | docker login --username $DOCKER_REGISTRY_USER --password-stdin $DOCKER_REGISTRY
+    - docker build --no-cache -t postgresai/dle-se-ansible:${CI_COMMIT_TAG:-latest} .
+    - docker push postgresai/dle-se-ansible:${CI_COMMIT_TAG:-latest} .
