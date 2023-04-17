@@ -22,4 +22,4 @@ build:
   script:
     - echo "${DOCKER_REGISTRY_PASSWORD}" | docker login --username $DOCKER_REGISTRY_USER --password-stdin $DOCKER_REGISTRY
     - docker build --no-cache -t postgresai/dle-se-ansible:${CI_COMMIT_TAG:-latest} .
-    - docker push postgresai/dle-se-ansible:${CI_COMMIT_TAG:-latest} .
+    - docker push postgresai/dle-se-ansible:${CI_COMMIT_TAG:-latest}
