@@ -58,17 +58,6 @@ global:
     # Default database name.
     dbname: postgres
 
-{% if dle_version | replace('v', '') is version('3.3.0', '<=') %}
-  # Telemetry: anonymous statistics sent to Postgres.ai.
-  # Used to analyze DLE usage, it helps the DLE maintainers make decisions on product development.
-  # Please leave it enabled if possible – this will contribute to DLE development.
-  # The full list of data points being collected: https://postgres.ai/docs/database-lab/telemetry
-  telemetry:
-    enabled: true
-    # Telemetry API URL. To send anonymous telemetry data, keep it default ("https://postgres.ai/api/general").
-    url: "https://postgres.ai/api/general"
-{% endif %}
-
 # Manages filesystem pools (in the case of ZFS) or volume groups.
 poolManager:
   # The full path which contains the pool mount directories. mountDir can contain multiple pool directories.
