@@ -31,7 +31,7 @@ embeddedUI:
   enabled: true
 
   # Docker image of the UI application.
-  dockerImage: "postgresai/ce-ui:{{ dle_ui_version | replace('v', '') }}"
+  dockerImage: "{{ dle_ui_image }}"
 
   # Host or IP address, from which the embedded UI container accepts HTTP connections.
   # By default, use a loop-back to accept only local connections.
@@ -57,17 +57,6 @@ global:
 
     # Default database name.
     dbname: postgres
-
-{% if dle_version | replace('v', '') is version('3.3.0', '<=') %}
-  # Telemetry: anonymous statistics sent to Postgres.ai.
-  # Used to analyze DLE usage, it helps the DLE maintainers make decisions on product development.
-  # Please leave it enabled if possible – this will contribute to DLE development.
-  # The full list of data points being collected: https://postgres.ai/docs/database-lab/telemetry
-  telemetry:
-    enabled: true
-    # Telemetry API URL. To send anonymous telemetry data, keep it default ("https://postgres.ai/api/general").
-    url: "https://postgres.ai/api/general"
-{% endif %}
 
 # Manages filesystem pools (in the case of ZFS) or volume groups.
 poolManager:

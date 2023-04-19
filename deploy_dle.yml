@@ -1,29 +1,41 @@
 ---
-
-# Create a virtual machine for DLE (if provision != 'none')
-- import_playbook: provision.yml
-  when: provision | lower != 'none'
-  tags: aws, gcp, azure, digitalocean, hetzner
-
-- name: Deploy DLE
+# pre-checks
+- name: Perform pre-checks
   hosts: localhost
   gather_facts: false
   vars_files:
     - vars/main.yml
   vars:
     minimal_ansible_version: 2.11.0
+    minimal_dle_version: 3.4.0
   tasks:
-    - name: Add host to dle_group
-      add_host:
-        name: "{{ dle_host }}"
-        groups: dle_group
-      changed_when: false
-      tags: always
-
     - name: Checking ansible version
       fail:
         msg: "Ansible version must be {{ minimal_ansible_version }} or higher"
       when: ansible_version.full is version(minimal_ansible_version, '<')
+
+    - name: Checking DLE version
+      fail:
+        msg: "DLE version must be {{ minimal_dle_version }} or higher"
+      when: dle_version | regex_replace('^v', '') | regex_replace('-rc.+$', '') is version(minimal_dle_version, '<')
+  tags: always
+
+# Create a virtual machine for DLE (if provision != 'none')
+- import_playbook: provision.yml
+  when: provision | lower != 'none'
+  tags: aws, gcp, azure, digitalocean, hetzner
+
+- name: add_host to dle_group
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  tasks:
+    - name: Add {{ dle_host }} to dle_group
+      add_host:
+        name: "{{ dle_host }}"
+        groups: dle_group
+      changed_when: false
       tags: always
 
 # add the path to the temporary ssh key if it is used
@@ -39,7 +51,7 @@
         - hostvars['localhost']['ssh_key_name'] is defined
         - hostvars['localhost']['ssh_key_name'] == 'dle_key_tmp'
 
-- name: Preparing the system
+- name: Deploy DLE
   hosts: dle_group
   become: true
   become_method: sudo
