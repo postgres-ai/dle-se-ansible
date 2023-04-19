@@ -21,7 +21,7 @@ dle_dump_location: "{{ zpool_mount_dir }}/{{ zpool_name }}/dataset_1/dump"  # Us
 dle_container_host: 127.0.0.1
 dle_container_name: dblab_server
 dle_port: 2345
-dle_version: 3.4.0-rc.0
+dle_version: 3.4.0-rc.1
 dle_image: "postgresai/dblab-server:{{ dle_version | replace('v', '') }}"
 dle_ui_version: "v{{ dle_version | replace('v', '') }}"
 dle_ui_image: "postgresai/ce-ui:{{ dle_ui_version }}"
