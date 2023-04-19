@@ -365,7 +365,7 @@ diagnostic:
 platform:
   # Platform API URL. To work with Postgres.ai SaaS, keep it default
   # ("https://postgres.ai/api/general").
-  url: "https://postgres.ai/api/general"
+  url: "{{ dle_platform_url | default('https://postgres.ai/api/general') }}"
   # Telemetry: anonymous statistics sent to Postgres.ai.
   # Used to analyze DLE usage, it helps the DLE maintainers make decisions on product development.
   # Please leave it enabled if possible – this will contribute to DLE development.
