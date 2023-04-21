@@ -176,6 +176,9 @@ retrieval:
     # Timetable is to be defined in crontab format: https://en.wikipedia.org/wiki/Cron#Overview
     timetable: "0 0 * * 1"
 
+    # Skip data refresh while the retrieval starts.
+    skipStartRefresh: false
+
   # The jobs section must not contain physical and logical restore jobs simultaneously.
   jobs:
     - logicalDump
@@ -232,6 +235,9 @@ retrieval:
         # If your source database has 4 vCPUs or less, and you don't want to saturate them, use 2 or 1.
         parallelJobs: 4
 
+        # Ignore errors that occurred during logical data dump. Do not ignore by default.
+        ignoreErrors: false
+
         # Options for direct restore to Database Lab Engine instance.
         # Uncomment this if you prefer restoring from the dump on the fly. In this case,
         # you do not need to use "logicalRestore" job. Keep in mind that unlike "logicalRestore",
@@ -240,9 +246,6 @@ retrieval:
         # immediateRestore:
         #   # Enable immediate restore.
         #   enabled: true
-        #   # Restore data even if the Postgres directory (`global.dataDir`) is not empty.
-        #   # Note the existing data will be overwritten.
-        #   forceInit: false
         #   # Option to adjust PostgreSQL configuration for a logical dump job.
         #   # It's useful if a dumped database contains non-standard extensions.
         #   <<: *db_configs
@@ -269,10 +272,8 @@ retrieval:
         # If your machine with DLE has 4 vCPUs or less, and you don't want to saturate them, use 2 or 1.
         parallelJobs: 4
 
-
-        # Restore data even if the Postgres directory (`global.dataDir`) is not empty.
-        # Note the existing data will be overwritten.
-        forceInit: true
+        # Ignore errors that occurred during logical data restore. Do not ignore by default.
+        ignoreErrors: false
 
         # Option to adjust PostgreSQL configuration for a logical restore job
         # It's useful if a restored database contains non-standard extensions.
@@ -416,16 +417,3 @@ platform:
 #    "select \\d+": "***"
 #    "[a-z0-9._%+\\-]+(@[a-z0-9.\\-]+\\.[a-z]{2,4})": "***$1"
 #
-# Tool to calculate timing difference between Database Lab and production environments.
-#estimator:
-#  # The ratio evaluating the timing difference for operations involving IO Read between Database Lab and production environments.
-#  readRatio: 1
-#
-#  # The ratio evaluating the timing difference for operations involving IO Write between Database Lab and production environments.
-#  writeRatio: 1
-#
-#  # Time interval of samples taken by the profiler.
-#  profilingInterval: 10ms
-#
-#  # The minimum number of samples sufficient to display the estimation results.
-#  sampleThreshold: 20
