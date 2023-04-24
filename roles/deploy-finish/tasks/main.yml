@@ -1,17 +1,17 @@
 ---
 
 - block:
-  - name: DLE connection info
+  - name: DLE setup finished – how to use
     run_once: true
     debug:
       msg:
-        - "DLE Server local URL: http://127.0.0.1:{{ dle_port }}"
-        - "DLE UI local URL: http://127.0.0.1:{{ dle_ui_port }}"
-        - "DLE verification token: {{ dle_verification_token }}"
-        - "Monitoring (Netdata) local URL: http://127.0.0.1:{{ netdata_port }}"
-        - "DLE public URL: {{ dle_public_url | default('Not available. The proxy server is not installed. Use SSH port forwarding to access DLE.') }}"
-        - "SSH-port-forwarding:"
-        - "  - For DLE API: 'ssh -N -L {{ dle_port }}:127.0.0.1:{{ dle_port }} {{ inventory_hostname }} -i YOUR_PRIVATE_KEY'"
-        - "  - For DLE UI: 'ssh -N -L {{ dle_ui_port }}:127.0.0.1:{{ dle_ui_port }} {{ inventory_hostname }} -i YOUR_PRIVATE_KEY'"
-        - "  - To monitoring tool (Netdata): 'ssh -N -L {{ netdata_port }}:127.0.0.1:{{ netdata_port }} {{ inventory_hostname }} -i YOUR_PRIVATE_KEY'"
+        - "1) Remember your verification token (to work with UI, API, CLI): {{ dle_verification_token }}"
+        - "2) SSH port forwarding for UI / API / CLI: 'ssh -N -L {{ dle_ui_port }}:127.0.0.1:{{ dle_ui_port }} {{ inventory_hostname }} -i YOUR_PRIVATE_KEY'"
+        - "3) DLE UI: http://127.0.0.1:{{ dle_ui_port }}"
+        - "4) DLE CLI:"
+        - "  a. API URL: http://127.0.0.1:{{ dle_ui_port }}/api"
+        - "  b. How to set up DLE CLI ('dblab'): https://postgres.ai/docs/how-to-guides/cli/cli-install-init"
+        - "5) Monitoring:"
+        - "  a. SSH port forwarding: 'ssh -N -L {{ netdata_port }}:127.0.0.1:{{ netdata_port }} {{ inventory_hostname }} -i YOUR_PRIVATE_KEY'"
+        - "  b. Open: http://127.0.0.1:{{ netdata_port }}"
 ...
