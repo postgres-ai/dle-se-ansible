@@ -22,6 +22,16 @@
 
 # SSH key
 - block:
+    # Delete the temporary ssh key from the cloud (if exists)
+    - name: "Hetzner Cloud: Remove a temporary ssh key {{ ssh_key_name }} from the cloud (if exists)"
+      hetzner.hcloud.hcloud_ssh_key:
+        api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+        name: "{{ ssh_key_name }}"
+        state: absent
+      when:
+        - ssh_key_name is defined
+        - ssh_key_name == 'dle_key_tmp'
+
     # if ssh_key_name and ssh_key_content is specified, add this ssh key to the cloud
     - name: "Hetzner Cloud: Add ssh key {{ ssh_key_name }} to the cloud"
       hetzner.hcloud.hcloud_ssh_key:

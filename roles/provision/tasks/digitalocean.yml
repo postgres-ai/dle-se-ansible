@@ -22,6 +22,17 @@
 
 # SSH key
 - block:
+    # Delete the temporary ssh key from the cloud (if exists)
+    - name: "DigitalOcean: Remove a temporary ssh key {{ ssh_key_name }} from the cloud (if exists)"
+      community.digitalocean.digital_ocean_sshkey:
+        oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
+        name: "{{ ssh_key_name }}"
+        ssh_pub_key: "{{ ssh_key_content }}"
+        state: absent
+      when:
+        - ssh_key_name is defined
+        - ssh_key_name == 'dle_key_tmp'
+
     # if ssh_key_name and ssh_key_content is specified, add this ssh key to the cloud
     - name: "DigitalOcean: Add ssh key {{ ssh_key_name }} to the cloud"
       community.digitalocean.digital_ocean_sshkey:
