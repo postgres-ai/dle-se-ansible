@@ -23,7 +23,7 @@
 # SSH key
 - block:
     # Delete the temporary ssh key from the cloud (if exists)
-    - name: "AWS: Remove a temporary ssh key {{ ssh_key_name }} from the cloud (if exists)"
+    - name: "AWS: Remove temporary SSH key {{ ssh_key_name }} from cloud (if any)"
       amazon.aws.ec2_key:
         access_key: "{{ lookup('ansible.builtin.env', 'AWS_ACCESS_KEY_ID') }}"
         secret_key: "{{ lookup('ansible.builtin.env', 'AWS_SECRET_ACCESS_KEY') }}"
@@ -35,7 +35,7 @@
         - ssh_key_name == 'dle_key_tmp'
 
     # if ssh_key_name and ssh_key_content is specified, add this ssh key to the cloud
-    - name: "AWS: Add ssh key {{ ssh_key_name }} to the cloud"
+    - name: "AWS: Add SSH key {{ ssh_key_name }} to cloud"
       amazon.aws.ec2_key:
         access_key: "{{ lookup('ansible.builtin.env', 'AWS_ACCESS_KEY_ID') }}"
         secret_key: "{{ lookup('ansible.builtin.env', 'AWS_SECRET_ACCESS_KEY') }}"
