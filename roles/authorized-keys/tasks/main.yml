@@ -16,13 +16,4 @@
     - ssh_public_keys is defined
     - ssh_public_keys | length > 0
 
-- name: Remove a temporary ssh public key from the server
-  authorized_key:
-    user: "{{ system_user.stdout }}"
-    key: "{{ hostvars['localhost']['dle_key_result']['ssh_public_key'] }}"
-    state: absent
-  no_log: true  # do not output public key to the ansible log
-  when:
-    - hostvars['localhost']['dle_key_result']['ssh_public_key'] is defined
-
 ...
