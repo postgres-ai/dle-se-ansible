@@ -1,5 +1,15 @@
 ---
 
+- name: Remove a temporary ssh public key from the server
+  authorized_key:
+    user: "{{ system_user.stdout }}"
+    key: "{{ hostvars['localhost']['dle_key_result']['ssh_public_key'] }}"
+    state: absent
+  no_log: true  # do not output public key to the ansible log
+  when:
+    - system_user.stdout is defined
+    - hostvars['localhost']['dle_key_result']['ssh_public_key'] is defined
+
 - block:
   - name: DLE setup finished – how to use
     run_once: true

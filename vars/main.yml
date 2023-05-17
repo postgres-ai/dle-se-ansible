@@ -23,7 +23,7 @@ dle_container_name: dblab_server
 dle_port: 2345
 dle_version: 3.4.0-rc.4
 dle_image: "postgresai/dblab-server:{{ dle_version | replace('v', '') }}"
-dle_ui_version: "v{{ dle_version | replace('v', '') }}"
+dle_ui_version: "{{ dle_version | replace('v', '') }}"
 dle_ui_image: "postgresai/ce-ui:{{ dle_ui_version }}"
 dle_ui_port: 2346
 dle_platform_project_name: ""  # Project name
