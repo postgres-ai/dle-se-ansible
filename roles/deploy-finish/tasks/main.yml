@@ -10,13 +10,13 @@
     - system_user.stdout is defined
     - hostvars['localhost']['dle_key_result']['ssh_public_key'] is defined
 
-- block:
+- block:  # TODO: narrow it (and find a way to get rid of double quotes)
   - name: Print usage instructions
     run_once: true
     debug:
       msg:
         - "1) Verification token (ensure to securely store it):                            "
-        - "       {{ dle_verification_token }}"                                        "
+        - "       {{ dle_verification_token }}                                             "
         - "                                                                                "
         - "2) SSH port forwarding for UI / API / CLI:                                      "
         - "       ssh -N -L {{ dle_ui_port }}:127.0.0.1:{{ dle_ui_port }} {{ inventory_hostname }} -i YOUR_PRIVATE_KEY     "
@@ -31,7 +31,7 @@
         - "  - CLI ('dblab') setup:                                                        "
         - "        export DBLAB_CLI_VERSION={{ dle_version }}                                          "
         - "        curl -sSL dblab.sh | bash                                               "
-        - "        dblab init --environment-id={{ server_name }} --token={{ dle_verification_token }} --url=http://127.0.0.1:{{ dle_ui_port }}/api" # TODO: narrow it (and find a way to get rid of double quotes)
+        - "        dblab init --environment-id={{ cli_environment_id }} --token={{ dle_verification_token }} --url=http://127.0.0.1:{{ dle_ui_port }}/api" 
         - "  - CLI docs:         https://cli-docs.dblab.dev/                               "
         - "                                                                                "
         - "6) Monitoring:                                                                  "
@@ -42,4 +42,5 @@
         - "7) To connect to clones, use SSH port forwarding too. E.g., for clone 6000:     "
         - "       ssh -N -L 6000:127.0.0.1:6000 {{ inventory_hostname }} -i YOUR_PRIVATE_KEY      "
         - "  - and then use: 'host=localhost port=6000 user=YOUR_USER dbname=postgres'     "
+  tags: info, usage
 ...
