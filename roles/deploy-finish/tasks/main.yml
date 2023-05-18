@@ -1,6 +1,6 @@
 ---
 
-- name: Remove a temporary ssh public key from the server
+- name: Remove temporary SSH public key from server
   authorized_key:
     user: "{{ system_user.stdout }}"
     key: "{{ hostvars['localhost']['dle_key_result']['ssh_public_key'] }}"
@@ -11,17 +11,27 @@
     - hostvars['localhost']['dle_key_result']['ssh_public_key'] is defined
 
 - block:
-  - name: DLE setup finished – how to use
+  - name: Print usage instructions
     run_once: true
     debug:
       msg:
-        - "1) Remember your verification token (to work with UI, API, CLI): {{ dle_verification_token }}"
-        - "2) SSH port forwarding for UI / API / CLI: 'ssh -N -L {{ dle_ui_port }}:127.0.0.1:{{ dle_ui_port }} {{ inventory_hostname }} -i YOUR_PRIVATE_KEY'"
-        - "3) DLE UI: http://127.0.0.1:{{ dle_ui_port }}"
-        - "4) DLE CLI:"
-        - "  a. API URL: http://127.0.0.1:{{ dle_ui_port }}/api"
-        - "  b. How to set up DLE CLI ('dblab'): https://postgres.ai/docs/how-to-guides/cli/cli-install-init"
-        - "5) Monitoring:"
-        - "  a. SSH port forwarding: 'ssh -N -L {{ netdata_port }}:127.0.0.1:{{ netdata_port }} {{ inventory_hostname }} -i YOUR_PRIVATE_KEY'"
-        - "  b. Open: http://127.0.0.1:{{ netdata_port }}"
+        - "1) Verification token:       {{ dle_verification_token }}                   "
+        - "2) SSH port forwarding for UI / API / CLI:                                      "
+        - "       ssh -N -L {{ dle_ui_port }}:127.0.0.1:{{ dle_ui_port }} {{ inventory_hostname }} -i YOUR_PRIVATE_KEY     "
+        - "                                                                                "
+        - "3) DBLab UI:                   http://127.0.0.1:{{ dle_ui_port }}                              "
+        - "                                                                                "
+        - "4) DBLab API:                  http://127.0.0.1:{{ dle_ui_port }}/api                          "
+        - "  - API docs:                https://dblab.readme.io/                           "
+        - "  - CLI ('dblab') setup:                                                        "
+        - "        curl -sSL dblab.sh | bash                                               "
+        - "                                                                                "
+        - "5) Monitoring:                                                                  "
+        - "  - SSH port forwarding:                                                        "
+        - "       ssh -N -L {{ netdata_port }}:127.0.0.1:{{ netdata_port }} {{ inventory_hostname }} -i YOUR_PRIVATE_KEY    "
+        - "  - Access monitoring: http://127.0.0.1:{{ netdata_port }}                                   "
+        - "                                                                                "
+        - "6) To connect to clones, use SSH port forwarding too. E.g., for clone 6000:     "
+        - "       ssh -N -L 6000:127.0.0.1:6000 {{ inventory_hostname }} -i YOUR_PRIVATE_KEY      "
+        - "  - and then use: 'host=localhost port=6000 user=YOUR_USER dbname=postgres'     "
 ...
