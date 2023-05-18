@@ -1,20 +1,12 @@
 ---
 
 - block:
-    - name: Download dblab CLI binary
-      get_url:
-        url: "https://storage.googleapis.com/database-lab-cli/{{ cli_version }}/dblab-linux-amd64"
-        dest: /tmp/
-        timeout: 60
-        validate_certs: false
-      environment: "{{ proxy_env | default({}) }}"
-
-    - name: Copy dblab CLI file to /usr/local/bin/
-      copy:
-        src: /tmp/dblab-linux-amd64
-        dest: /usr/local/bin/dblab
-        mode: u+x,g+x,o+x
-        remote_src: true
+    - name: Install dblab CLI
+      shell: |
+        export DBLAB_CLI_VERSION={{ cli_version }}
+        curl -sSL dblab.sh | bash
+      args:
+        executable: /bin/bash
 
     - name: Create CLI configuration directory
       file:
