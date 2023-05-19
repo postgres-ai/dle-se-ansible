@@ -3,9 +3,13 @@
 - name: Install python dependencies
   block:
     - name: Make sure the python3-pip package are present on controlling host
-      package:
+      ansible.builtin.package:
         name: python3-pip
         state: present
+      register: package_status
+      until: package_status is success
+      delay: 10
+      retries: 3
       delegate_to: 127.0.0.1
       run_once: true
       when: ansible_distribution != "MacOSX"

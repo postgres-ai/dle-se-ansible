@@ -91,6 +91,10 @@
       apt:
         update_cache: true
         cache_valid_time: 3600
+      register: apt_status
+      until: apt_status is success
+      delay: 10
+      retries: 3
       when: ansible_os_family == "Debian"
 
     - name: Make sure the gnupg and apt-transport-https packages are present
@@ -99,6 +103,10 @@
           - gnupg
           - apt-transport-https
         state: present
+      register: apt_status
+      until: apt_status is success
+      delay: 10
+      retries: 3
       when: ansible_os_family == "Debian"
 
   roles:

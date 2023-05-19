@@ -8,6 +8,10 @@
       ansible.builtin.package:
         name: python3-pip
         state: present
+      register: package_status
+      until: package_status is success
+      delay: 10
+      retries: 3
       when: ansible_distribution != "MacOSX"
 
     - name: Check if the Azure collection are installed
