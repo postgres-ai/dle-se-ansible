@@ -23,6 +23,10 @@
       apt:
         name: "getenvoy-envoy"
         state: "present"
+      register: apt_status
+      until: apt_status is success
+      delay: 10
+      retries: 3
   environment: "{{ proxy_env | default({}) }}"
   when:
     - ansible_os_family == "Debian"
