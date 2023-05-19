@@ -33,7 +33,7 @@ dle_computing_infrastructure: "do"
 # CLI
 cli_install: true
 cli_version: "{{ dle_version | replace('v', '') }}"
-cli_environment_id: dblab
+cli_environment_id: "{{ dle_platform_project_name }}"
 
 # Monitoring
 
