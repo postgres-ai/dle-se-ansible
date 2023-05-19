@@ -1,8 +1,8 @@
 ---
 # Dependencies
-- name: Install python dependencies
+- name: Install Python dependencies
   block:
-    - name: Make sure the python3-pip package are present on controlling host
+    - name: Ensure that 'python3-pip' package is present on controlling host
       ansible.builtin.package:
         name: python3-pip
         state: present
@@ -14,7 +14,7 @@
       run_once: true
       when: ansible_distribution != "MacOSX"
 
-    - name: Install dopy dependency on controlling host
+    - name: Install 'dopy' dependency on controlling host
       pip:
         name: dopy
         extra_args: --user
@@ -27,7 +27,7 @@
 # SSH key
 - block:
     # Delete the temporary ssh key from the cloud (if exists)
-    - name: "DigitalOcean: Remove temporary SSH key {{ ssh_key_name }} from cloud (if any)"
+    - name: "DigitalOcean: Remove temporary SSH key '{{ ssh_key_name }}' from cloud (if any)"
       community.digitalocean.digital_ocean_sshkey:
         oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
         name: "{{ ssh_key_name }}"
@@ -38,7 +38,7 @@
         - ssh_key_name == 'dle_key_tmp'
 
     # if ssh_key_name and ssh_key_content is specified, add this ssh key to the cloud
-    - name: "DigitalOcean: Add SSH key {{ ssh_key_name }} to cloud"
+    - name: "DigitalOcean: Add SSH key '{{ ssh_key_name }}' to cloud"
       community.digitalocean.digital_ocean_sshkey:
         oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
         name: "{{ ssh_key_name }}"
@@ -55,7 +55,7 @@
 
     # if ssh_key_name is specified, get the fingerprint of one ssh key
     # or if dle_key_tmp is used and ssh_public_keys is difined
-    - name: "DigitalOcean: Get Fingerprint for SSH key {{ ssh_key_name }}"
+    - name: "DigitalOcean: Get Fingerprint for SSH key '{{ ssh_key_name }}'"
       set_fact:
         ssh_key_fingerprint: "{{ [item.fingerprint] }}"
       loop: "{{ ssh_keys.data | lower }}"
@@ -67,9 +67,9 @@
         - item.name == ssh_key_name | lower
 
     # Stop, if the ssh key is not found
-    - name: "DigitalOcean: Fail if the SSH key is not found"
+    - name: "DigitalOcean: Fail if SSH key '{{ ssh_key_name }}' is not found"
       fail:
-        msg: "SSH key {{ ssh_key_name }} not found. Please make sure that the key has been added to DigitalOcean."
+        msg: "SSH key {{ ssh_key_name }} not found. Ensure that key has been added to DigitalOcean."
       when:
         - (ssh_key_name | length > 0 and ssh_key_name != 'dle_key_tmp')
         - ssh_key_fingerprint is not defined
@@ -89,7 +89,7 @@
 
 # Create (if state or state is present)
 - block:
-    - name: "DigitalOcean: Create or modify a Droplet ({{ server_name }})"
+    - name: "DigitalOcean: Create or modify Droplet '{{ server_name }}'"
       community.digitalocean.digital_ocean_droplet:
         oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
         state: present
@@ -102,7 +102,7 @@
         wait_timeout: 500
       register: droplet_result
 
-    - name: "DigitalOcean: Create or modify Block Storage ({{ server_name }}-storage)"
+    - name: "DigitalOcean: Create or modify Block Storage '{{ server_name }}-storage'"
       community.digitalocean.digital_ocean_block_storage:
         oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
         state: present
@@ -112,7 +112,7 @@
         block_size: "{{ volume_size }}"
       register: block_storage_result
 
-    - name: "DigitalOcean: Attach Block Storage {{ server_name }}-storage to a Droplet {{ server_name }}"
+    - name: "DigitalOcean: Attach Block Storage '{{ server_name }}-storage' to Droplet '{{ server_name }}'"
       community.digitalocean.digital_ocean_block_storage:
         oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
         state: present
@@ -137,7 +137,7 @@
   when: droplet_result.data is defined
 
 # set_fact: dle_host
-- name: "set_fact: dle_host (for deploy DLE)"
+- name: "set_fact: dle_host (for deploy DBLab)"
   set_fact:
     dle_host: "root@{{ (droplet_result.data.droplet.networks.v4 | selectattr('type', 'equalto', 'public')).0.ip_address }}"
   when: droplet_result.data is defined
@@ -151,8 +151,8 @@
   become_user: root
   when: droplet_result.data is defined
 
-# Delete the temporary ssh key from the cloud after creating the droplet
-- name: "DigitalOcean: Remove a temporary ssh key {{ ssh_key_name }} from the cloud"
+# Delete the temporary SSH key from the cloud after creating the droplet
+- name: "DigitalOcean: Remove temporary SSH key '{{ ssh_key_name }}' from cloud"
   community.digitalocean.digital_ocean_sshkey:
     oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
     name: "{{ ssh_key_name }}"
@@ -163,7 +163,7 @@
     - ssh_key_name == 'dle_key_tmp'
 
 # Delete (if state or state is absent)
-- name: "DigitalOcean: Delete a Droplet ({{ server_name }})"
+- name: "DigitalOcean: Delete Droplet '{{ server_name }}'"
   community.digitalocean.digital_ocean_droplet:
     oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
     state: absent
@@ -176,7 +176,7 @@
   delay: 5
   when: state == 'absent'
 
-- name: "DigitalOcean: Delete a Block Storage {{ server_name }}-storage"
+- name: "DigitalOcean: Delete Block Storage '{{ server_name }}-storage'"
   community.digitalocean.digital_ocean_block_storage:
     oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
     state: absent

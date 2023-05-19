@@ -1,5 +1,5 @@
 ---
-- name: Get the system username
+- name: Get system username
   become: false
   command: whoami
   register: system_user

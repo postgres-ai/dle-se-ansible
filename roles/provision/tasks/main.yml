@@ -1,10 +1,10 @@
 ---
 
-- name: Make sure that the required variables are specified
+- name: Ensure that required variables are specified
   fail:
     msg:
       - "One or more required variables have empty values."
-      - "Please specify a value for the variables: server_name, server_type, server_image, server_location, volume_size"
+      - "Please specify value for variables: 'server_name', 'server_type', 'server_image', 'server_location', 'volume_size'."
   when: state == 'present' and
     (server_name | length < 1 or
     server_type | length < 1 or
@@ -14,7 +14,7 @@
 
 # if ssh_key_name is not specified
 # with each new execution of the playbook, a new temporary ssh key is created
-- name: Generate a new temporary ssh key to access the server when deploying DLE
+- name: Generate new temporary SSH key to access server to deploy DBLab
   user:
     name: "{{ lookup('env', 'USER') }}"
     generate_ssh_key: true
