@@ -18,6 +18,15 @@
       fail:
         msg: "DLE version must be {{ minimal_dle_version }} or higher"
       when: dle_version | regex_replace('^v', '') | regex_replace('-rc.+$', '') is version(minimal_dle_version, '<')
+
+    - name: Confirm that necessary variables are set
+      debug:
+        msg:
+          - "Some required variables have empty values."
+          - "Specify values for variables: 'dle_platform_project_name', 'dle_platform_org_key'."
+          - "For questions, contact Postgres.ai: https://postgres.ai/contact."
+      failed_when: dle_platform_project_name | length < 1 or dle_platform_org_key | length < 1
+      when: dle_platform_project_name | length < 1 or dle_platform_org_key | length < 1
   tags: always
 
 # Create a virtual machine for DLE (if provision != 'none')
