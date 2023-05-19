@@ -1,8 +1,8 @@
 ---
 # Dependencies
-- name: Install python dependencies
+- name: Install Python dependencies
   block:
-    - name: Make sure the python3-pip package are present on controlling host
+    - name: Ensure that 'python3-pip' package is present on controlling host
       ansible.builtin.package:
         name: python3-pip
         state: present
@@ -14,7 +14,7 @@
       run_once: true
       when: ansible_distribution != "MacOSX"
 
-    - name: Install boto3 dependency on controlling host
+    - name: Install 'boto3' dependency on controlling host
       ansible.builtin.pip:
         name: boto3
         extra_args: --user
@@ -27,7 +27,7 @@
 # SSH key
 - block:
     # Delete the temporary ssh key from the cloud (if exists)
-    - name: "AWS: Remove temporary SSH key {{ ssh_key_name }} from cloud (if any)"
+    - name: "AWS: Remove temporary SSH key '{{ ssh_key_name }}' from cloud (if any)"
       amazon.aws.ec2_key:
         access_key: "{{ lookup('ansible.builtin.env', 'AWS_ACCESS_KEY_ID') }}"
         secret_key: "{{ lookup('ansible.builtin.env', 'AWS_SECRET_ACCESS_KEY') }}"
@@ -39,7 +39,7 @@
         - ssh_key_name == 'dle_key_tmp'
 
     # if ssh_key_name and ssh_key_content is specified, add this ssh key to the cloud
-    - name: "AWS: Add SSH key {{ ssh_key_name }} to cloud"
+    - name: "AWS: Add SSH key '{{ ssh_key_name }}' to cloud"
       amazon.aws.ec2_key:
         access_key: "{{ lookup('ansible.builtin.env', 'AWS_ACCESS_KEY_ID') }}"
         secret_key: "{{ lookup('ansible.builtin.env', 'AWS_SECRET_ACCESS_KEY') }}"
@@ -56,7 +56,7 @@
 # Create (if state is present)
 - block:
     # if server_network is specified, get vpc id for this subnet
-    - name: "AWS: Gather information about VPC for {{ server_network }}"
+    - name: "AWS: Gather information about VPC for '{{ server_network }}'"
       amazon.aws.ec2_vpc_subnet_info:
         region: "{{ server_location }}"
         subnet_ids: "{{ server_network }}"
@@ -104,7 +104,7 @@
         - vpc_subnet_info.subnets[0].id is defined
 
     # Security Group
-    - name: "AWS: Create a DLE Security Group"
+    - name: "AWS: Create DBLab Security Group"
       amazon.aws.ec2_security_group:
         name: dle_security_group
         state: present
@@ -122,7 +122,7 @@
             cidr_ip: 0.0.0.0/0
 
     # Instance and volume
-    - name: "AWS: Create or modify EC2 instance {{ server_name }}"
+    - name: "AWS: Create or modify EC2 instance '{{ server_name }}'"
       amazon.aws.ec2_instance:
         access_key: "{{ lookup('ansible.builtin.env', 'AWS_ACCESS_KEY_ID') }}"
         secret_key: "{{ lookup('ansible.builtin.env', 'AWS_SECRET_ACCESS_KEY') }}"
@@ -170,7 +170,7 @@
     dle_host: "ubuntu@{{ ec2_result.instances[0].public_ip_address }}"
   when: ec2_result.instances is defined
 
-- name: "Wait for the {{ dle_host }} to be available via ssh"
+- name: "Wait for host '{{ dle_host }}' to be available via SSH"
   ansible.builtin.wait_for:
     host: "{{ ec2_result.instances[0].public_ip_address }}"
     port: 22
@@ -180,7 +180,7 @@
   when: ec2_result.instances is defined
 
 # Delete the temporary ssh key from the cloud after creating the EC2 instance
-- name: "AWS: Remove a temporary ssh key {{ ssh_key_name }} from the cloud"
+- name: "AWS: Remove temporary SSH key '{{ ssh_key_name }}' from cloud"
   amazon.aws.ec2_key:
     access_key: "{{ lookup('ansible.builtin.env', 'AWS_ACCESS_KEY_ID') }}"
     secret_key: "{{ lookup('ansible.builtin.env', 'AWS_SECRET_ACCESS_KEY') }}"
@@ -193,7 +193,7 @@
     - ssh_key_name == 'dle_key_tmp'
 
 # Delete (if state is absent)
-- name: "AWS: Delete a EC2 instance {{ server_name }}"
+- name: "AWS: Delete EC2 instance '{{ server_name }}'"
   amazon.aws.ec2_instance:
     access_key: "{{ lookup('ansible.builtin.env', 'AWS_ACCESS_KEY_ID') }}"
     secret_key: "{{ lookup('ansible.builtin.env', 'AWS_SECRET_ACCESS_KEY') }}"

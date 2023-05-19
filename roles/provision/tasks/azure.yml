@@ -2,9 +2,9 @@
 # DRAFT (not tested)
 
 # Dependencies
-- name: Install python dependencies
+- name: Install Python dependencies
   block:
-    - name: Make sure the python3-pip package are present on controlling host
+    - name: Ensure that 'python3-pip' package is present on controlling host
       ansible.builtin.package:
         name: python3-pip
         state: present
@@ -14,7 +14,7 @@
       retries: 3
       when: ansible_distribution != "MacOSX"
 
-    - name: Check if the Azure collection are installed
+    - name: Ensure that Azure collection is installed
       command: ansible-galaxy collection list azure.azcollection
       changed_when: false
       failed_when: false
@@ -28,7 +28,7 @@
       when:
         - azcollection_result.stderr is search("unable to find")
 
-    - name: Get ansible_collections path
+    - name: Get 'ansible_collections' path
       command: ansible-galaxy collection list | grep ansible_collections
       register: collections_path
 
@@ -43,32 +43,32 @@
   run_once: true
 
 # Create (if state is present)
-- name: "Azure: Create DLE resource group"
+- name: "Azure: Create DBLab resource group"
   azure.azcollection.azure_rm_resourcegroup:
     name: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
     location: "{{ server_location }}"
 
-- name: "Azure: Create DLE virtual network"
+- name: "Azure: Create DBLab virtual network"
   azure.azcollection.azure_rm_virtualnetwork:
     resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
     name: "{{ azure_virtualnetwork | default('DLEnetwork') }}"
     address_prefixes: "10.0.0.0/16"
 
-- name: "Azure: Create DLE subnet"
+- name: "Azure: Create DBLab subnet"
   azure.azcollection.azure_rm_subnet:
     resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
     name: "{{ azure_subnet | default('DLEnetworkSubnet') }}"
     address_prefix: "10.0.1.0/24"
     virtual_network: "{{ azure_virtualnetwork | default('DLEnetwork') }}"
 
-- name: "Azure: Create public IP address (for VM {{ server_name }})"
+- name: "Azure: Create public IP address (for VM '{{ server_name }}')"
   azure.azcollection.azure_rm_publicipaddress:
     resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
     allocation_method: static
     name: "{{ azure_publicipaddress | default('DLEPublicIP') }}"
   register: public_ip_result
 
-- name: "Azure: Create DLE Network Security Group"
+- name: "Azure: Create DBLab Network Security Group"
   azure.azcollection.azure_rm_securitygroup:
     resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
     name: "{{ azure_securitygroup | default('DLENetworkSecurityGroup') }}"
@@ -85,7 +85,7 @@
         priority: 1001
         direction: Inbound
 
-- name: "Azure: Create network interface (for VM {{ server_name }})"
+- name: "Azure: Create network interface (for VM '{{ server_name }}')"
   azure.azcollection.azure_rm_networkinterface:
     resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
     name: "{{ azure_networkinterface | default('DLEnic') }}"
@@ -94,7 +94,7 @@
     public_ip_name: "{{ azure_publicipaddress | default('DLEPublicIP') }}"
     security_group: "{{ azure_securitygroup | default('DLENetworkSecurityGroup') }}"
 
-- name: "Azure: Create a virtual machine {{ server_name }}"
+- name: "Azure: Create virtual machine '{{ server_name }}'"
   azure.azcollection.azure_rm_virtualmachine:
     resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
     name: "{{ server_name | lower }}"
@@ -124,12 +124,12 @@
   when: virtualmachine_result is defined
 
 # set_fact: dle_host
-- name: "set_fact: dle_host (for deploy DLE)"
+- name: "set_fact: dle_host (for deploy DBLab)"
   set_fact:
     dle_host: "root@{{ public_ip_result.state.ip_address }}"
   when: public_ip_result.state.ip_address is defined
 
-- name: "Wait for the {{ dle_host }} to be available via ssh"
+- name: "Wait for host '{{ dle_host }}' to be available via SSH"
   ansible.builtin.wait_for:
     host: "{{ public_ip_result.state.ip_address }}"
     port: 22
@@ -140,43 +140,43 @@
 
 # Delete (if state is absent)
 - block:
-    - name: "Azure: Delete DLE virtual machine ({{ server_name }})"
+    - name: "Azure: Delete DBLab virtual machine '{{ server_name }}'"
       azure.azcollection.azure_rm_virtualmachine:
         resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
         name: "{{ server_name | lower }}"
         state: absent
 
-    - name: "Azure: Delete DLE network interface"
+    - name: "Azure: Delete DBLab network interface"
       azure.azcollection.azure_rm_networkinterface:
         resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
         name: "{{ azure_networkinterface | default('DLEnic') }}"
         state: absent
 
-    - name: "Azure: Delete DLE Network Security Group"
+    - name: "Azure: Delete DBLab Network Security Group"
       azure.azcollection.azure_rm_securitygroup:
         resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
         name: "{{ azure_securitygroup | default('DLENetworkSecurityGroup') }}"
         state: absent
 
-    - name: "Azure: Delete DLE Public IP"
+    - name: "Azure: Delete DBLab public IP"
       azure.azcollection.azure_rm_publicipaddress:
         resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
         name: "{{ azure_publicipaddress | default('DLEPublicIP') }}"
         state: absent
 
-    - name: "Azure: Delete DLE subnet"
+    - name: "Azure: Delete DBLab subnet"
       azure.azcollection.azure_rm_subnet:
         resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
         name: "{{ azure_subnet | default('DLEnetworkSubnet') }}"
         state: absent
 
-    - name: "Azure: Delete DLE virtual network"
+    - name: "Azure: Delete DBLab virtual network"
       azure.azcollection.azure_rm_virtualnetwork:
         resource_group: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
         name: "{{ azure_virtualnetwork | default('DLEnetwork') }}"
         state: absent
 
-    - name: "Azure: Delete DLE resource group"
+    - name: "Azure: Delete DBLab resource group"
       azure.azcollection.azure_rm_resourcegroup:
         name: "{{ azure_resourcegroup | default('DLEResourceGroup') }}"
         state: absent

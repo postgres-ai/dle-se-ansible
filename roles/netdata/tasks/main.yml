@@ -1,6 +1,6 @@
 ---
 - block:
-    - name: Copy DLE plugin configuration for Netdata
+    - name: Copy Netdata plugin for DBLab
       template:
         src: templates/netdata_DLE.conf.j2
         dest: "{{ dle_config_path }}/netdata_DLE.conf"
@@ -27,7 +27,7 @@
           - /sys:/host/sys:ro
           - /etc/os-release:/host/etc/os-release:ro
 
-    - name: Check Netdata is running
+    - name: Ensure that Netdata is running
       wait_for:
         port: "{{ netdata_port }}"
         host: "localhost"

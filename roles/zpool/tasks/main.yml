@@ -1,5 +1,5 @@
 ---
-- name: Check if ZFS pool is already exist
+- name: Check if ZFS pool already exists
   command: "zpool status -v {{ zpool_name }}"
   register: zpool_status
   changed_when: false
@@ -21,13 +21,13 @@
       changed_when: false
 
     # Stop, if empty volume is not detected
-    - name: The empty volume is not detected
+    - name: Empty volume is not detected
       fail:
         msg: "Whoops! The empty volume is not detected."
       when: zpool_volume.stdout is defined and zpool_volume.stdout | length < 1
 
     # if empty disk is detected, use it
-    - name: Create zpool (use /dev/{{ zpool_volume.stdout }})
+    - name: Create zpool (use '/dev/{{ zpool_volume.stdout }}')
       command: >-
         zpool create -f
         -O compression=on
@@ -45,7 +45,7 @@
     - zpool
 
 - block:  # if the zpool_disk variable is defined, use this disk
-    - name: "Read device information ({{ zpool_disk }})"
+    - name: "Read device information for '{{ zpool_disk }}'"
       shell: |
         set -o pipefail;
         lsblk {{ zpool_disk }} --output FSTYPE,MOUNTPOINT,TYPE --json | jq -r '.blockdevices'
@@ -56,15 +56,15 @@
 
     # Stop, if the disk contains mountpoint or file system (except when the file system type is equal to zfs_member)
     # it is acceptable if the disk contains empty partitions
-    - name: Check that the disk does not contain mount points or file system
+    - name: Check that disk does not contain mount points or filesystem
       fail:
         msg:
-          - "The disk {{ zpool_disk }} is not empty (mountpoint: {{ item.mountpoint }}, fstype: {{ item.fstype }})"
+          - "Disk '{{ zpool_disk }}' is not empty (mountpoint: '{{ item.mountpoint }}', fstype: '{{ item.fstype }}')."
       when: (item.mountpoint is defined and item.mountpoint != None) or
             (item.fstype is defined and (item.fstype != None and item.fstype != "zfs_member"))
       loop: "{{ lsblk_result.stdout }}"
 
-    - name: Create zpool (use {{ zpool_disk }})
+    - name: Create zpool (use '{{ zpool_disk }}')
       command: >-
         zpool create -f
         -O compression=on
@@ -84,7 +84,7 @@
 
 # Create datasets
 - block:
-    - name: "Check the number of datasets for the {{ zpool_name }}"
+    - name: "Check number of datasets for '{{ zpool_name }}'"
       shell: |
         set -o pipefail;
         zfs list -t filesystem | grep {{ zpool_name }} | grep -c dataset

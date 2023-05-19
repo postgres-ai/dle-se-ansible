@@ -36,7 +36,7 @@
 
 # Configure Envoy Proxy
 - block:
-    - name: Create envoy directory
+    - name: Create 'envoy' config directory
       file:
         path: /etc/envoy/
         state: directory
@@ -44,7 +44,7 @@
         group: root
         mode: "0777"
 
-    - name: Create certs directory
+    - name: Create 'certs' sub-directory
       file:
         path: /etc/envoy/certs
         state: directory
@@ -52,11 +52,11 @@
         group: root
         mode: "0777"
 
-    - name: Create certificate
+    - name: Generate certificate
       include_role:
         name: geerlingguy.certbot
 
-    - name: Create a link to certificates
+    - name: Create link to directory with certificates
       file:
         src: "{{ item.src }}"
         dest: "{{ item.dest }}"
@@ -80,7 +80,7 @@
         - { src: envoy.yaml.j2, dest: /etc/envoy/envoy.yaml }
         - { src: envoy.deploy.j2, dest: /etc/letsencrypt/renewal-hooks/deploy/envoy.deploy }
 
-    - name: Enable and restart envoy service
+    - name: Enable and restart Envoy service
       service:
         name: envoy
         enabled: yes

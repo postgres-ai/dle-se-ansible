@@ -2,7 +2,7 @@
 # Dependencies
 - name: Install python dependencies
   block:
-    - name: Make sure the python3-pip package are present on controlling host
+    - name: Ensure that 'python3-pip' package is present on controlling host
       ansible.builtin.package:
         name: python3-pip
         state: present
@@ -14,7 +14,7 @@
       run_once: true
       when: ansible_distribution != "MacOSX"
 
-    - name: Install hcloud dependency on controlling host
+    - name: Install 'hcloud' dependency on controlling host
       ansible.builtin.pip:
         name: hcloud
         extra_args: --user
@@ -27,7 +27,7 @@
 # SSH key
 - block:
     # Delete the temporary ssh key from the cloud (if exists)
-    - name: "Hetzner Cloud: Remove temporary SSH key {{ ssh_key_name }} from cloud (if any)"
+    - name: "Hetzner Cloud: Remove temporary SSH key '{{ ssh_key_name }}' from cloud (if any)"
       hetzner.hcloud.hcloud_ssh_key:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
         name: "{{ ssh_key_name }}"
@@ -37,7 +37,7 @@
         - ssh_key_name == 'dle_key_tmp'
 
     # if ssh_key_name and ssh_key_content is specified, add this ssh key to the cloud
-    - name: "Hetzner Cloud: Add SSH key {{ ssh_key_name }} to cloud"
+    - name: "Hetzner Cloud: Add SSH key '{{ ssh_key_name }}' to cloud"
       hetzner.hcloud.hcloud_ssh_key:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
         name: "{{ ssh_key_name }}"
@@ -48,7 +48,7 @@
         - ssh_key_content | length > 0
 
     # if ssh_key_name is specified
-    - name: "Hetzner Cloud: Gather information about SSH key {{ ssh_key_name }}"
+    - name: "Hetzner Cloud: Gather information about SSH key '{{ ssh_key_name }}'"
       hetzner.hcloud.hcloud_ssh_key_info:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
         name: "{{ ssh_key_name | lower }}"
@@ -56,9 +56,9 @@
       when: ssh_key_name | length > 0
 
     # Stop, if the ssh key is not found
-    - name: "Hetzner Cloud: Fail if the SSH key is not found"
+    - name: "Hetzner Cloud: Fail if SSH key is not found"
       ansible.builtin.fail:
-        msg: "SSH key {{ ssh_key_name }} not found. Please make sure that the key has been added to Hetzner Cloud."
+        msg: "SSH key {{ ssh_key_name }} not found. Ensure that key has been added to Hetzner Cloud."
       when:
         - ssh_key_name | length > 0
         - ssh_keys.hcloud_ssh_key_info is defined
@@ -84,7 +84,7 @@
         - (ssh_key_name | length < 1 or ssh_key_name == 'dle_key_tmp')
         - (ssh_public_keys is not defined or ssh_public_keys | length < 1)
 
-    - name: "Hetzner Cloud: Get the names of all SSH keys"
+    - name: "Hetzner Cloud: Get names of all SSH keys"
       set_fact:
         ssh_key_names: "{{ ssh_key_names | default([]) + [item.name] }}"
       loop: "{{ ssh_keys.hcloud_ssh_key_info | lower }}"
@@ -97,7 +97,7 @@
 
 # Create (if state is present)
 - block:
-    - name: "Hetzner Cloud: Create or modify server {{ server_name }}"
+    - name: "Hetzner Cloud: Create or modify server '{{ server_name }}'"
       hetzner.hcloud.hcloud_server:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
         name: "{{ server_name | lower }}"
@@ -110,7 +110,7 @@
         enable_ipv6: false
       register: server_result
 
-    - name: "Hetzner Cloud: Add server to the network {{ server_network }}"
+    - name: "Hetzner Cloud: Add server to network '{{ server_network }}'"
       hcloud_server_network:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
         network: "{{ server_network }}"
@@ -118,7 +118,7 @@
         state: present
       when: server_network is defined and server_network | length > 0
 
-    - name: "Hetzner Cloud: Create or modify volume for server {{ server_name }}"
+    - name: "Hetzner Cloud: Create or modify volume for server '{{ server_name }}'"
       hetzner.hcloud.hcloud_volume:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
         name: "{{ server_name }}-storage"
@@ -139,7 +139,7 @@
     dle_host: "root@{{ server_result.hcloud_server.ipv4_address }}"
   when: server_result.hcloud_server is defined
 
-- name: "Wait for the {{ dle_host }} to be available via ssh"
+- name: "Wait for host '{{ dle_host }}' to be available via SSH"
   ansible.builtin.wait_for:
     host: "{{ server_result.hcloud_server.ipv4_address }}"
     port: 22
@@ -149,7 +149,7 @@
   when: server_result.hcloud_server is defined
 
 # Delete the temporary ssh key from the cloud after creating the server
-- name: "Hetzner Cloud: Remove a temporary ssh key {{ ssh_key_name }} from the cloud"
+- name: "Hetzner Cloud: Remove temporary SSH key {{ ssh_key_name }} from cloud"
   hetzner.hcloud.hcloud_ssh_key:
     api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
     name: "{{ ssh_key_name }}"
@@ -160,7 +160,7 @@
 
 # Delete (if state is absent)
 - block:
-    - name: "Hetzner Cloud: Delete a server {{ server_name }}"
+    - name: "Hetzner Cloud: Delete server '{{ server_name }}'"
       hetzner.hcloud.hcloud_server:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
         name: "{{ server_name | lower }}"
@@ -169,7 +169,7 @@
       register: server_result
       when: state == 'absent'
 
-    - name: "Hetzner Cloud: Delete a volume {{ server_name }}-storage"
+    - name: "Hetzner Cloud: Delete volume '{{ server_name }}-storage'"
       hetzner.hcloud.hcloud_volume:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
         name: "{{ server_name }}-storage"

@@ -13,7 +13,7 @@
       loop_var: dir_item
 
   # if dle_config_file is defined, copy the server.yml file
-  - name: Copy DLE configuration file to "{{ dle_config_path }}/server.yml"
+  - name: Copy DBLab configuration file to '{{ dle_config_path }}/server.yml'
     copy:
       src: "{{ dle_config_file }}"
       dest: "{{ dle_config_path }}/server.yml"
@@ -26,7 +26,7 @@
       - dle_config_file | length > 0
 
   # if dle_config_file is not defined, generate a new server.yml from the jinja template
-  - name: Generate DLE configuration file "{{ dle_config_path }}/server.yml"
+  - name: Generate DBLab configuration file '{{ dle_config_path }}/server.yml'
     template:
       src: templates/server.yml.j2
       dest: "{{ dle_config_path }}/server.yml"
@@ -37,7 +37,7 @@
     when: dle_config_file is not defined or
           dle_config_file | length < 1
 
-  - name: Create pending.retrieval
+  - name: Create file 'pending.retrieval'
     file:
       path: "{{ dle_meta_path }}/pending.retrieval"
       state: touch
@@ -50,7 +50,7 @@
           dle_config_file | length < 1
 
 - block:
-    - name: Make sure that the DLE container is running
+    - name: Ensure that DBLab server container is running
       docker_container:
         name: "{{ dle_container_name }}"
         image: "{{ dle_image }}"
@@ -75,17 +75,16 @@
           DLE_COMPUTING_INFRASTRUCTURE: "{{ dle_computing_infrastructure }}"
       register: dblab_server_start
 
-    - name: Wait for DLE port to be available
+    - name: Wait for DBLab API port to be available
       wait_for:
         port: "{{ dle_port }}"
         host: "localhost"
         state: started
         timeout: 60
         delay: 10
-      ignore_errors: false
       when: dblab_server_start is changed
 
-    - name: Check that DLE is healthy
+    - name: Ensure DBLab API is healthy
       uri:
         url: "http://localhost:{{ dle_port }}/healthz"
       register: _result
@@ -93,7 +92,7 @@
       retries: 10
       delay: 10
 
-    - name: Check that DLE UI is available
+    - name: Ensure DBLab UI is available
       wait_for:
         port: "{{ dle_ui_port }}"
         host: "localhost"

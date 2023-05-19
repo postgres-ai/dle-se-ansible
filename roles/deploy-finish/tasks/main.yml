@@ -18,7 +18,7 @@
         - "1) Verification token (ensure to securely store it):                            "
         - "       {{ dle_verification_token }}                                             "
         - "                                                                                "
-        - "2) SSH port forwarding for UI / API / CLI:                                      "
+        - "2) Use SSH port forwarding for UI / API / CLI:                                      "
         - "       ssh -N -L {{ dle_ui_port }}:127.0.0.1:{{ dle_ui_port }} {{ inventory_hostname }} -i YOUR_PRIVATE_KEY     "
         - "                                                                                "
         - "3) DBLab UI:          http://127.0.0.1:{{ dle_ui_port }}                                     "
@@ -39,8 +39,8 @@
         - "       ssh -N -L {{ netdata_port }}:127.0.0.1:{{ netdata_port }} {{ inventory_hostname }} -i YOUR_PRIVATE_KEY    "
         - "  - Monitoring URL:   http://127.0.0.1:{{ netdata_port }}                                     "
         - "                                                                                "
-        - "7) To connect to clones, use SSH port forwarding too. E.g., for clone 6000:     "
+        - "7) To connect to clones, also use SSH port forwarding. E.g., for clone 6000:     "
         - "       ssh -N -L 6000:127.0.0.1:6000 {{ inventory_hostname }} -i YOUR_PRIVATE_KEY      "
-        - "  - and then use: 'host=localhost port=6000 user=YOUR_USER dbname=postgres'     "
+        - "  - and then use: 'host=127.0.0.1 port=6000 user=YOUR_USER dbname=postgres'     "
   tags: info, usage
 ...

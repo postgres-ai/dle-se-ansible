@@ -1,8 +1,8 @@
 ---
 # Dependencies
-- name: Install python dependencies
+- name: Install Python dependencies
   block:
-    - name: Make sure the python3-pip package are present on controlling host
+    - name: Ensure that 'python3-pip' package is present on controlling host
       ansible.builtin.package:
         name: python3-pip
         state: present
@@ -14,7 +14,7 @@
       run_once: true
       when: ansible_distribution != "MacOSX"
 
-    - name: Install google-auth dependency on controlling host
+    - name: Install 'google-auth' dependency on controlling host
       ansible.builtin.pip:
         name: google-auth
         extra_args: --user
@@ -42,7 +42,7 @@
       when: ssh_key_content is not defined or
             ssh_key_content | length < 1
 
-    - name: "GCP: Create or modify a instance {{ server_name }}"
+    - name: "GCP: Create or modify instance '{{ server_name }}'"
       google.cloud.gcp_compute_instance:
         auth_kind: serviceaccount
         service_account_contents: "{{ lookup('ansible.builtin.env', 'GCP_SERVICE_ACCOUNT_CONTENTS') }}"
@@ -97,7 +97,7 @@
     dle_host: "root@{{ server_result.networkInterfaces[0].accessConfigs[0].natIP }}"
   when: server_result.networkInterfaces is defined
 
-- name: "Wait for the {{ dle_host }} to be available via ssh"
+- name: "Wait for host '{{ dle_host }}' to be available via SSH"
   ansible.builtin.wait_for:
     host: "{{ server_result.networkInterfaces[0].accessConfigs[0].natIP }}"
     port: 22
@@ -108,7 +108,7 @@
 
 # Delete (if state is absent)
 - block:
-    - name: "GCP: Delete a instance {{ server_name }}"
+    - name: "GCP: Delete instance '{{ server_name }}'"
       google.cloud.gcp_compute_instance:
         auth_kind: serviceaccount
         service_account_contents: "{{ lookup('ansible.builtin.env', 'GCP_SERVICE_ACCOUNT_CONTENTS') }}"

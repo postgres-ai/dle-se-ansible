@@ -8,7 +8,7 @@
       loop: "{{ apt_repository_keys }}"
       when: apt_repository_keys | length > 0
 
-    - name: Add repository apt-key from a keyserver
+    - name: Add repository apt-key from keyserver
       apt_key:
         keyserver: "{{ item.keyserver }}"
         id: "{{ item.id }}"

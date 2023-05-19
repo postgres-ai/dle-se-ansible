@@ -1,7 +1,7 @@
 ---
 
 - block:
-    - name: Install dblab CLI
+    - name: Install DBLab CLI ('dblab')
       shell: |
         export DBLAB_CLI_VERSION={{ cli_version }}
         curl -sSL dblab.sh | bash
@@ -16,7 +16,7 @@
         group: "{{ username }}"
         mode: 0644
 
-    - name: Generate CLI conf file "{{ dle_base_path }}/cli/cli.yml"
+    - name: Generate CLI configuration file '{{ dle_base_path }}/cli/cli.yml'
       template:
         src: templates/cli.yml.j2
         dest: "{{ dle_base_path }}/cli/cli.yml"
