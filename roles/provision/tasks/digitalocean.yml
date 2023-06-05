@@ -89,6 +89,7 @@
 
 # Create (if state or state is present)
 - block:
+    # if server_network is not specified, use default vpc
     - name: "DigitalOcean: Create or modify Droplet '{{ server_name }}'"
       community.digitalocean.digital_ocean_droplet:
         oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
@@ -100,7 +101,56 @@
         image: "{{ server_image }}"
         ssh_keys: "{{ ssh_key_fingerprint }}"
         wait_timeout: 500
-      register: droplet_result
+      register: droplet_result_default_vpc
+      when: server_network is not defined or server_network | length < 1
+
+    # if server_network is specified, get UUID for this vpc
+    - name: "DigitalOcean: Gather information about VPC"
+      community.digitalocean.digital_ocean_vpc_info:
+        oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
+      register: vpc_info
+      when: server_network is defined and server_network | length > 0
+
+    - name: "Fail if no VPC found in the specified region"
+      fail:
+        msg: "No VPC found with name '{{ server_network }}' in region '{{ server_location }}'"
+      when: 
+        - vpc_info.data is defined
+        - vpc_info.data | selectattr('region', 'equalto', server_location) | selectattr('name', 'equalto', server_network) | list | length == 0
+
+    - name: "set_fact: vpc_id"
+      set_fact:
+        vpc_id: "{{ item.id }}"
+      loop: "{{ vpc_info.data }}"
+      loop_control:
+        label: "{{ item.id }}"
+      when:
+        - vpc_info.data is defined
+        - item.region == server_location
+        - item.name == server_network
+
+    - name: "DigitalOcean: Create or modify Droplet '{{ server_name }}' with VPC '{{ server_network }}'"
+      community.digitalocean.digital_ocean_droplet:
+        oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
+        state: present
+        name: "{{ server_name }}"
+        unique_name: true
+        size: "{{ server_type }}"
+        region: "{{ server_location }}"
+        image: "{{ server_image }}"
+        ssh_keys: "{{ ssh_key_fingerprint }}"
+        vpc_uuid: "{{ vpc_id }}"
+        wait_timeout: 500
+      register: droplet_result_with_vpc
+      when: server_network is defined and server_network | length > 0
+
+    - name: "set_fact: droplet_result"
+      set_fact:
+        droplet_result: "{{ droplet_result_default_vpc
+                            if server_network | default([]) | length < 1
+                            else droplet_result_with_vpc }}"
+      when: droplet_result_default_vpc is defined or
+            droplet_result_with_vpc is defined
 
     - name: "DigitalOcean: Create or modify Block Storage '{{ server_name }}-storage'"
       community.digitalocean.digital_ocean_block_storage:

@@ -34,7 +34,7 @@
   when: provision | lower != 'none'
   tags: aws, gcp, azure, digitalocean, hetzner
 
-- name: add_host to dle_group
+- name: Add host to dle_group
   hosts: localhost
   gather_facts: false
   vars_files:
@@ -45,10 +45,11 @@
         name: "{{ dle_host }}"
         groups: dle_group
       changed_when: false
+      when: dle_host is defined and dle_host | length > 1
       tags: always
 
 # add the path to the temporary ssh key if it is used
-- name: set_fact for dle_group
+- name: Set facts for dle_group
   hosts: dle_group
   gather_facts: false
   tasks:
