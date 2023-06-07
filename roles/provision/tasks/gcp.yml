@@ -42,6 +42,10 @@
       when: ssh_key_content is not defined or
             ssh_key_content | length < 1
 
+    - name: "GCP: set_fact gcp_network_name"
+      set_fact:
+        gcp_network_name: "{{ server_network if server_network is defined and server_network | length > 0 else 'default' }}"
+
     - name: "GCP: Create or modify instance '{{ server_name }}'"
       google.cloud.gcp_compute_instance:
         auth_kind: serviceaccount
@@ -67,7 +71,7 @@
               disk_size_gb: "{{ volume_size }}"
         network_interfaces:
           - network:
-              selfLink: global/networks/default
+              selfLink: "projects/{{ gcp_project | default(project_info.resources[0].projectNumber) }}/global/networks/{{ gcp_network_name }}"
             access_configs:
               - name: External NAT
                 type: ONE_TO_ONE_NAT
