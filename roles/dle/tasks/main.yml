@@ -28,7 +28,7 @@
   # if dle_config_file is not defined, generate a new server.yml from the jinja template
   - name: Generate DBLab configuration file '{{ dle_config_path }}/server.yml'
     template:
-      src: templates/server.yml.j2
+      src: "templates/{{ dle_version.split('.')[:2] | join('.') }}/server.yml.j2"
       dest: "{{ dle_config_path }}/server.yml"
       owner: "{{ username }}"
       group: "{{ username }}"
