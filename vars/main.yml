@@ -69,14 +69,14 @@ supabase_runner_token: "secret-token"
 supabase_runner_network: "dblab_supabase_network"
 # Supabase images
 supabase_images:
- - rest: "postgrest/postgrest:v11.1.0"
-# - studio: "supabase/studio:0.23.05_amd64"
-# - kong: "kong:2.8.3"
-# - auth: "supabase/gotrue:v2.70.0"
-# - realtime: "supabase/realtime:v2.14.0"
-# - storage: "supabase/storage-api:v0.40.1"
-# - imgproxy: "darthsim/imgproxy:v3.18"
-# - meta: "supabase/postgres-meta:v0.66.2"
-# - functions: "supabase/edge-runtime:v1.5.0"
+ - "postgrest/postgrest:v11.1.0"
+# - "supabase/studio:0.23.05_amd64"
+# - "kong:2.8.3"
+# - "supabase/gotrue:v2.70.0"
+# - "supabase/realtime:v2.14.0"
+# - "supabase/storage-api:v0.40.1"
+# - "darthsim/imgproxy:v3.18"
+# - "supabase/postgres-meta:v0.66.2"
+# - "supabase/edge-runtime:v1.5.0"
 
 ...
