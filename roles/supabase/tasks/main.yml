@@ -1,0 +1,50 @@
+---
+
+- name: Pull Supabase Docker images
+  docker_image:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - "{{ supabase_rest_image }}"
+    - "{{ supabase_studio_image }}"
+    - "{{ supabase_kong_image }}"
+    - "{{ supabase_auth_image }}"
+    - "{{ supabase_realtime_image }}"
+    - "{{ supabase_storage_image }}"
+    - "{{ supabase_imgproxy_image }}"
+    - "{{ supabase_meta_image }}"
+    - "{{ supabase_functions_image }}"
+  when: item is defined and item | length > 0
+
+- name: Create Supabase Runner network
+  docker_network:
+    name: "{{ supabase_runner_network }}"
+    driver: bridge
+    driver_options:
+      com.docker.network.driver.mtu: 1440
+    enable_ipv6: false
+    internal: false
+    state: present
+
+- name: Run Supabase Runner container
+  docker_container:
+    name: dblab_supabase_runner
+    image: "{{ supabase_runner_image }}"
+    state: started
+    restart_policy: unless-stopped
+    ports:
+      - "{{ supabase_runner_port }}:8080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    networks:
+      - name: "{{ supabase_runner_network }}"
+    detach: true
+    env:
+      DOCKER_API_VERSION: "1.39"
+
+- name: Wait for Supabase Runner to be ready
+  wait_for:
+    host: 127.0.0.1
+    port: "{{ supabase_runner_port }}"
+    delay: 10
+    timeout: 60
