@@ -6,7 +6,7 @@
     source: pull
   loop: "{{ supabase_images | dict2items }}"
   loop_control:
-    loop_var: item.value
+    label: item.value
   when:
    - supabase_images is defined
    - supabase_images | length > 0
