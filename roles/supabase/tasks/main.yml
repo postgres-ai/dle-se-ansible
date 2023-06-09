@@ -3,7 +3,7 @@
 - name: Pull Supabase Docker images
   docker_image:
     name: "{{ item }}"
-    state: present
+    source: pull
   loop: "{{ supabase_images }}"
   when:
    - supabase_images is defined
