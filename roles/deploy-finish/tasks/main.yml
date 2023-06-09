@@ -1,5 +1,8 @@
 ---
 
+- name: Make sure handlers are flushed immediately
+  meta: flush_handlers
+
 - name: Remove temporary SSH public key from server
   authorized_key:
     user: "{{ system_user.stdout }}"
