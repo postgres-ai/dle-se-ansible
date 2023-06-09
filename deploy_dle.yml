@@ -127,6 +127,10 @@
     # Monitoring
     - role: netdata
 
+    # Supabase
+    - role: supabase
+      when: supabase_components | bool
+
     # finish (connection info)
     - role: deploy-finish
 
