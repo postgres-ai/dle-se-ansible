@@ -61,22 +61,21 @@ certbot_certs:
 
 # Supabase Runner - https://gitlab.com/postgres-ai/dblab-supabase-runner
 supabase_components: false # Set "true" to configure 'dblab-supabase-runner'
-# Supabase images
-supabase_rest_image: "postgrest/postgrest:v11.1.0"
-supabase_studio_image: "supabase/studio:0.23.05_amd64"
-supabase_kong_image: "kong:2.8.3"
-supabase_auth_image: "supabase/gotrue:v2.70.0"
-supabase_realtime_image: "supabase/realtime:v2.14.0"
-supabase_storage_image: "supabase/storage-api:v0.40.1"
-supabase_imgproxy_image: "darthsim/imgproxy:v3.18"
-supabase_meta_image: "supabase/postgres-meta:v0.66.2"
-supabase_functions_image: "supabase/edge-runtime:v1.5.0"
-# Supabase runner variables
 supabase_runner_version: 0.2
 supabase_runner_image: "registry.gitlab.com/postgres-ai/dblab-supabase-runner:v{{ supabase_runner_version }}"
 supabase_runner_port: 8080
 supabase_runner_url: "http://dblab_supabase_runner:{{ supabase_runner_port }}"
 supabase_runner_token: "secret-token"
 supabase_runner_network: "dblab_supabase_network"
+# Supabase images
+supabase_rest_image: "postgrest/postgrest:v11.1.0"
+#supabase_studio_image: "supabase/studio:0.23.05_amd64"
+#supabase_kong_image: "kong:2.8.3"
+#supabase_auth_image: "supabase/gotrue:v2.70.0"
+#supabase_realtime_image: "supabase/realtime:v2.14.0"
+#supabase_storage_image: "supabase/storage-api:v0.40.1"
+#supabase_imgproxy_image: "darthsim/imgproxy:v3.18"
+#supabase_meta_image: "supabase/postgres-meta:v0.66.2"
+#supabase_functions_image: "supabase/edge-runtime:v1.5.0"
 
 ...
