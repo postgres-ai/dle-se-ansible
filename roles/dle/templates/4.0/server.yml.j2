@@ -421,6 +421,16 @@ platform:
 #    "[a-z0-9._%+\\-]+(@[a-z0-9.\\-]+\\.[a-z]{2,4})": "***$1"
 #
 # Webhooks configuration.
+{% if supabase_components | bool %}
+webhooks:
+  hooks:
+    - url: "{{ supabase_runner_url }}"
+      secret: "{{ supabase_runner_token }}"
+      trigger:
+        - clone_create
+        - clone_delete
+
+{% else %}
 #webhooks:
 #  hooks:
 #    - url: ""
@@ -428,3 +438,4 @@ platform:
 #      trigger:
 #        - clone_create
 #        - clone_reset
+{% endif %}
