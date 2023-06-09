@@ -2,9 +2,11 @@
 
 - name: Pull Supabase Docker images
   docker_image:
-    name: "{{ item }}"
+    name: "{{ item.value }}"
     source: pull
-  loop: "{{ supabase_images | map('dict2items') | map('map', 'value') | flatten | list }}"
+  loop: "{{ supabase_images | dict2items }}"
+  loop_control:
+    label: "{{ item.value }}"
   when:
     - supabase_images is defined
     - supabase_images | length > 0
