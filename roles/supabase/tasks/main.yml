@@ -2,14 +2,14 @@
 
 - name: Pull Supabase Docker images
   docker_image:
-    name: "{{ item.value }}"
+    name: "{{ item.key }}"
     source: pull
-  loop: "{{ supabase_images | dict2items }}"
+  loop: "{{ supabase_images | map(attribute='items') | flatten }}"
   loop_control:
-    label: item.value
+    label: item.key
   when:
-   - supabase_images is defined
-   - supabase_images | length > 0
+    - supabase_images is defined
+    - supabase_images | length > 0
 
 - name: Create Supabase Runner network
   docker_network:
