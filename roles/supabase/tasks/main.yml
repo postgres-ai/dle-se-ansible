@@ -4,17 +4,10 @@
   docker_image:
     name: "{{ item }}"
     state: present
-  loop:
-    - "{{ supabase_rest_image }}"
-    - "{{ supabase_studio_image }}"
-    - "{{ supabase_kong_image }}"
-    - "{{ supabase_auth_image }}"
-    - "{{ supabase_realtime_image }}"
-    - "{{ supabase_storage_image }}"
-    - "{{ supabase_imgproxy_image }}"
-    - "{{ supabase_meta_image }}"
-    - "{{ supabase_functions_image }}"
-  when: item is defined and item | length > 0
+  loop: "{{ supabase_images }}"
+  when:
+   - supabase_images is defined
+   - supabase_images | length > 0
 
 - name: Create Supabase Runner network
   docker_network:
