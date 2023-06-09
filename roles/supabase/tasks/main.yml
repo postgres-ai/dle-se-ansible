@@ -19,6 +19,13 @@
     internal: false
     state: present
 
+- name: Connect DBLab server container to Supabase network
+  docker_network:
+    name: "{{ supabase_runner_network }}"
+    connected:
+      - "{{ dle_container_name }}"
+    appends: true
+
 - name: Run Supabase Runner container
   docker_container:
     name: dblab_supabase_runner
