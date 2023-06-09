@@ -4,7 +4,11 @@
   docker_image:
     name: "{{ item }}"
     source: pull
-  loop: "{{ supabase_images }}"
+  loop: "{{ supabase_images + [supabase_runner_image] }}"
+  register: docker_image
+  until: docker_image is success
+  delay: 10
+  retries: 3
   when:
     - supabase_images is defined
     - supabase_images | length > 0
