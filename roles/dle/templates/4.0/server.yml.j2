@@ -189,6 +189,7 @@ retrieval:
         <<: *db_container
         # The dump file will be automatically created on this location and then used to restore.
         # Ensure that there is enough disk space.
+        # If you specify dumpLocation outside the mountDir, add this location as a volume to the DLE container.
         dumpLocation: "{{ dle_dump_location }}"
 
         # Source of data.
@@ -266,6 +267,7 @@ retrieval:
       options:
         <<: *db_container
         # The location of the archive files (or directories, for directory-format archives) to be restored.
+        # If you specify dumpLocation outside the mountDir, add this location as a volume to the DLE container.
         dumpLocation: "{{ dle_dump_location }}"
 
         # Use parallel jobs to restore faster.
