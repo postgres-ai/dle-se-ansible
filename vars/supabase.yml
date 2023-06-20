@@ -22,7 +22,7 @@ supabase_meta_image: "supabase/postgres-meta:v0.66.2"
 supabase_functions_image: "supabase/edge-runtime:v1.5.0"
 
 supabase_images:
-  - "{{ supabase_postgrest_image }}"
+  - "{{ supabase_rest_image }}"
 #  - "{{ supabase_auth_image }}"
 #  - "{{ supabase_studio_image }}"
 #  - "{{ supabase_kong_image }}"
