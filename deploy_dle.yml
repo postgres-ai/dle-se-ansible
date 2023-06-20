@@ -88,6 +88,11 @@
       include_vars: "vars/{{ ansible_os_family }}.yml"
       tags: always
 
+    - name: Include Supabase variables
+      include_vars: vars/supabase.yml
+      when: supabase_components | bool
+      tags: always
+
     - name: Update apt cache
       apt:
         update_cache: true
