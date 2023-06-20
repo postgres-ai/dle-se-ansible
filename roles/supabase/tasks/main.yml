@@ -45,6 +45,12 @@
     detach: true
     env:
       DOCKER_API_VERSION: "1.39"
+      SECRET_TOKEN: "{{ supabase_runner_token }}"
+      NETWORK_NAME: "{{ supabase_runner_network }}"
+      JWT_SECRET: "{{ supabase_jwt }}"
+      ANON_KEY: "{{ supabase_anon_key }}"
+      SERVICE_ROLE_KEY: "{{ supabase_service_role_key }}"
+      POSTGREST_IMAGE: "{{ supabase_postgrest_image }}"
 
 - name: Wait for Supabase Runner to be ready
   wait_for:
