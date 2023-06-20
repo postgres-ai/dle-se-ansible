@@ -33,6 +33,7 @@ dle_container_name: dblab_server
 dle_container_volumes:
   - /var/run/docker.sock:/var/run/docker.sock
   - "{{ zpool_mount_dir }}:{{ zpool_mount_dir }}:rshared"
+  - "{{ dle_dump_location }}:{{ dle_dump_location }}"  # TODO: comment out after merging https://gitlab.com/postgres-ai/database-lab/-/merge_requests/778
   - "{{ dle_config_path }}:/home/dblab/configs"
   - "{{ dle_meta_path }}:/home/dblab/meta"
   - "{{ dle_logs_path }}:/home/dblab/logs"
