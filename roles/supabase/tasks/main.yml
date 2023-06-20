@@ -50,7 +50,7 @@
       JWT_SECRET: "{{ supabase_jwt }}"
       ANON_KEY: "{{ supabase_anon_key }}"
       SERVICE_ROLE_KEY: "{{ supabase_service_role_key }}"
-      POSTGREST_IMAGE: "{{ supabase_postgrest_image }}"
+      POSTGREST_IMAGE: "{{ supabase_rest_image }}"
 
 - name: Wait for Supabase Runner to be ready
   wait_for:
