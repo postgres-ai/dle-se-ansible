@@ -51,6 +51,7 @@
       ANON_KEY: "{{ supabase_anon_key }}"
       SERVICE_ROLE_KEY: "{{ supabase_service_role_key }}"
       POSTGREST_IMAGE: "{{ supabase_rest_image }}"
+      AUTH_IMAGE: "{{ supabase_auth_image }}"
 
 - name: Wait for Supabase Runner to be ready
   wait_for:

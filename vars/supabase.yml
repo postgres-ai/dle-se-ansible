@@ -12,7 +12,7 @@ supabase_runner_network: "dblab_supabase_network"
 
 # Supabase images
 supabase_rest_image: "postgrest/postgrest:v11.1.0"
-supabase_auth_image: "supabase/gotrue:v2.70.0"
+supabase_auth_image: "supabase/gotrue:v2.74.2"
 supabase_studio_image: "supabase/studio:0.23.05_amd64"
 supabase_kong_image: "kong:2.8.3"
 supabase_realtime_image: "supabase/realtime:v2.14.0"
@@ -23,7 +23,7 @@ supabase_functions_image: "supabase/edge-runtime:v1.5.0"
 
 supabase_images:
   - "{{ supabase_rest_image }}"
-#  - "{{ supabase_auth_image }}"
+  - "{{ supabase_auth_image }}"
 #  - "{{ supabase_studio_image }}"
 #  - "{{ supabase_kong_image }}"
 #  - "{{ supabase_realtime_image }}"
