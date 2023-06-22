@@ -37,7 +37,7 @@
 
 # if dle_config_file is defined, copy the server.yml file
 - name: Copy Supabase env file to '{{ supabase_runner_env_file }}'
-  copy:
+  template:
     src: templates/.env.example.j2
     dest: "{{ supabase_runner_env_file }}"
     owner: "{{ username }}"
