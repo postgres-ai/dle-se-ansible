@@ -68,7 +68,7 @@
             type: "{{ volume_type | default('pd-ssd') }}"
             initialize_params:
               disk_name: "{{ server_name }}-storage"
-              disk_size_gb: "{{ volume_size }}"
+              disk_size_gb: "{{ volume_size | int }}"
         network_interfaces:
           - network:
               selfLink: "projects/{{ gcp_project | default(project_info.resources[0].projectNumber) }}/global/networks/{{ gcp_network_name }}"
