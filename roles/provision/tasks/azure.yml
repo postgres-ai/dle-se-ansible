@@ -113,7 +113,7 @@
       version: "{{ azure_vm_image_version | default('latest') }}"
     data_disks:
       - lun: 0
-        disk_size_gb: "{{ volume_size }}"
+        disk_size_gb: "{{ volume_size | int }}"
         managed_disk_type: "{{ volume_type | default('{{ StandardSSD_LRS }}') }}"
     register: virtualmachine_result
 
