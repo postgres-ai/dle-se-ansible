@@ -30,6 +30,20 @@
       - "{{ dle_container_name }}"
     appends: true
 
+- name: Create Supabase Runner config dir
+  file:
+    dest: "{{ supabase_runner_config_path }}"
+    state: directory
+
+# if dle_config_file is defined, copy the server.yml file
+- name: Copy Supabase env file to '{{ supabase_runner_env_file }}'
+  copy:
+    src: templates/.env.example.j2
+    dest: "{{ supabase_runner_env_file }}"
+    owner: "{{ username }}"
+    group: "{{ username }}"
+    mode: 0600
+
 - name: Run Supabase Runner container
   docker_container:
     name: dblab_supabase_runner
@@ -43,13 +57,11 @@
     networks:
       - name: "{{ supabase_runner_network }}"
     detach: true
+    env_file: "{{ supabase_runner_env_file }}"
     env:
       DOCKER_API_VERSION: "1.39"
       SECRET_TOKEN: "{{ supabase_runner_token }}"
       NETWORK_NAME: "{{ supabase_runner_network }}"
-      JWT_SECRET: "{{ supabase_jwt }}"
-      ANON_KEY: "{{ supabase_anon_key }}"
-      SERVICE_ROLE_KEY: "{{ supabase_service_role_key }}"
       POSTGREST_IMAGE: "{{ supabase_rest_image }}"
       AUTH_IMAGE: "{{ supabase_auth_image }}"
 
