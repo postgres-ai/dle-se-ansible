@@ -10,7 +10,7 @@ supabase_runner_url: "http://dblab_supabase_runner:{{ supabase_runner_port }}"
 supabase_runner_token: "secret-token"
 supabase_runner_network: "dblab_supabase_network"
 supabase_runner_config_path: "{{ dle_base_path }}/supabase"
-supabase_runner_env_file: "{{ supabase_runner_config_path }}/.env"
+supabase_runner_env_file: "{{ supabase_runner_config_path }}/env"
 
 # Supabase images
 supabase_rest_image: "postgrest/postgrest:v11.1.0"
