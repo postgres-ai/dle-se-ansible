@@ -20,6 +20,7 @@ before_script:
 build:
   stage: build
   script:
+    - export build_tag="${CI_COMMIT_TAG:-${CI_COMMIT_REF_SLUG}}" && echo 'Building & pushing container image with tag ${build_tag}'
     - echo "${DOCKER_REGISTRY_PASSWORD}" | docker login --username $DOCKER_REGISTRY_USER --password-stdin $DOCKER_REGISTRY
-    - docker build --no-cache -t postgresai/dle-se-ansible:${CI_COMMIT_TAG:-latest} .
-    - docker push postgresai/dle-se-ansible:${CI_COMMIT_TAG:-latest}
+    - docker build --no-cache -t postgresai/dle-se-ansible:$build_tag .
+    - docker push postgresai/dle-se-ansible:$build_tag
