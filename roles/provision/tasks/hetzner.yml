@@ -123,7 +123,7 @@
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
         name: "{{ server_name }}-storage"
         state: present
-        size: "{{ volume_size }}"
+        size: "{{ volume_size | int }}"
         server: "{{ server_name | lower }}"
   when: state == 'present'
 

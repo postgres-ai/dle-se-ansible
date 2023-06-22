@@ -159,7 +159,7 @@
         command: create
         volume_name: "{{ server_name }}-storage"
         region: "{{ server_location }}"
-        block_size: "{{ volume_size }}"
+        block_size: "{{ volume_size | int }}"
       register: block_storage_result
 
     - name: "DigitalOcean: Attach Block Storage '{{ server_name }}-storage' to Droplet '{{ server_name }}'"

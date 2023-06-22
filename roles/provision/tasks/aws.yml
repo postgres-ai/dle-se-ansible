@@ -141,7 +141,7 @@
           - device_name: /dev/sdb
             ebs:
               volume_type: "{{ volume_type | default('gp3') }}"
-              volume_size: "{{ volume_size }}"
+              volume_size: "{{ volume_size | int }}"
               delete_on_termination: true
       register: ec2_result
       until:
