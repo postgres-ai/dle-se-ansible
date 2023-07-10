@@ -20,11 +20,21 @@
   become: true
   become_method: sudo
   gather_facts: true
-  tags: always
   any_errors_fatal: true
   vars_files:
     - vars/volume.yml
   environment: "{{ proxy_env | default({}) }}"
+
+  pre_tasks:
+    - name: Make sure that jq package are present
+      package:
+        name: jq
+        state: present
+      register: package_status
+      until: package_status is success
+      delay: 5
+      retries: 3
+      tags: always
 
   roles:
     - role: volume
