@@ -39,7 +39,8 @@ cli_environment_id: "{{ dle_platform_project_name }}"
 
 # Netdata - https://github.com/netdata/netdata
 netdata_install: true
-netdata_version: 1.37.1
+netdata_version: 1.40.1
+netdata_image: "postgresai/netdata-for-dle:v{{ netdata_version | replace('v', '') }}"
 netdata_port: 19999
 
 # Proxy
