@@ -29,6 +29,9 @@ dle_ui_port: 2346
 dle_platform_project_name: ""  # Project name
 dle_platform_org_key: ""  # Organization key
 dle_computing_infrastructure: "do"
+dle_clone_port_pool:
+  from: 6000
+  to: 6100
 
 # CLI
 cli_install: true
@@ -46,7 +49,8 @@ netdata_port: 19999
 # Proxy
 proxy_install: false # Set "true" to install Envoy proxy and issue Let's Encrypt certificate
 proxy_dle_public_port: 446
-certbot_install_method: snap
+certbot_install_method: pip
+certbot_install_version: 2.6.0
 certbot_create_if_missing: true
 certbot_create_method: standalone
 certbot_auto_renew: true
