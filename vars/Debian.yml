@@ -12,6 +12,7 @@ system_packages:
   - apt-transport-https
   - ca-certificates
   - gnupg-agent
+  - python3-pip
   - python3-software-properties
   - python3-docker
   - software-properties-common

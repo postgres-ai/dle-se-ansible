@@ -11,6 +11,7 @@
       - "{{ dle_dump_location }}"
     loop_control:
       loop_var: dir_item
+    tags: dle_conf
 
   # if dle_config_file is defined, copy the server.yml file
   - name: Copy DBLab configuration file to '{{ dle_config_path }}/server.yml'
@@ -24,6 +25,7 @@
     when:
       - dle_config_file is defined
       - dle_config_file | length > 0
+    tags: dle_conf
 
   # if dle_config_file is not defined, generate a new server.yml from the jinja template
   - name: Generate DBLab configuration file '{{ dle_config_path }}/server.yml'
@@ -36,6 +38,7 @@
     notify: "restart dblab_server"
     when: dle_config_file is not defined or
           dle_config_file | length < 1
+    tags: dle_conf
 
   - name: Create file 'pending.retrieval'
     file:
@@ -48,6 +51,7 @@
       access_time: preserve
     when: dle_config_file is not defined or
           dle_config_file | length < 1
+  tags: dle
 
 - block:
     - name: Ensure that DBLab server container is running
@@ -100,5 +104,6 @@
         timeout: 30
         delay: 10
       ignore_errors: false
+  tags: dle
 
 ...

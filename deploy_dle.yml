@@ -1,4 +1,8 @@
 ---
+# TODO
+# - Add firewall role
+# - Envoy in docker
+
 # pre-checks
 - name: Perform pre-checks
   hosts: localhost

@@ -1,7 +1,7 @@
 ---
 # Debian
 - name: Install system packages
-  apt:
+  ansible.builtin.apt:
     name: "{{ item }}"
     state: present
   loop: "{{ system_packages }}"
@@ -12,5 +12,23 @@
   environment: "{{ proxy_env | default({}) }}"
   when: ansible_os_family == "Debian"
   tags: install_packages
+
+# TODO: Remove this task once pip install is added in 'ansible-role-certbot' 
+# See: https://github.com/geerlingguy/ansible-role-certbot/pull/189
+- block:
+    - name: "Install Certbot {{ certbot_install_version }} using pip"
+      ansible.builtin.pip:
+        name: "certbot=={{ certbot_install_version }}"
+        executable: pip3
+        extra_args: "--trusted-host=pypi.python.org --trusted-host=pypi.org --trusted-host=files.pythonhosted.org"
+        umask: "0022"
+
+    - name: Set certbot_script variable
+      set_fact:
+        certbot_script: "/usr/local/bin/certbot"
+  when:
+    - proxy_install | bool
+    - certbot_install_method == 'pip'
+  tags: proxy
 
 ...

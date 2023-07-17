@@ -55,6 +55,8 @@
     - name: Generate certificate
       include_role:
         name: geerlingguy.certbot
+      vars:
+        certbot_create_standalone_stop_services: [envoy]
 
     - name: Create link to directory with certificates
       file:
