@@ -51,7 +51,7 @@
     - name: "Hetzner Cloud: Gather information about SSH key '{{ ssh_key_name }}'"
       hetzner.hcloud.hcloud_ssh_key_info:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
-        name: "{{ ssh_key_name | lower }}"
+        name: "{{ ssh_key_name }}"
       register: ssh_keys
       when: ssh_key_name | length > 0
 
@@ -67,7 +67,7 @@
     - name: "Hetzner Cloud: set_fact ssh_key_names"
       set_fact:
         ssh_key_names: "{{ ssh_key_names | default([]) + [item.name] }}"
-      loop: "{{ ssh_keys.hcloud_ssh_key_info | lower }}"
+      loop: "{{ ssh_keys.hcloud_ssh_key_info }}"
       no_log: true  # do not display the public key
       when:
         - ssh_key_name | length > 0
@@ -87,7 +87,7 @@
     - name: "Hetzner Cloud: Get names of all SSH keys"
       set_fact:
         ssh_key_names: "{{ ssh_key_names | default([]) + [item.name] }}"
-      loop: "{{ ssh_keys.hcloud_ssh_key_info | lower }}"
+      loop: "{{ ssh_keys.hcloud_ssh_key_info }}"
       loop_control:  # do not display the public key
         label: "{{ item.name }}"
       when:
