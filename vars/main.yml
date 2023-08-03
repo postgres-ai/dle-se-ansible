@@ -32,6 +32,7 @@ dle_computing_infrastructure: "do"
 dle_clone_port_pool:
   from: 6000
   to: 6100
+dle_clone_access_addresses: "127.0.0.1"  # IP addresses that can be used to access clones.
 
 # CLI
 cli_install: true
