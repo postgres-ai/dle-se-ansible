@@ -68,10 +68,6 @@
           - "{{ dle_config_path }}:/home/dblab/configs"
           - "{{ dle_meta_path }}:/home/dblab/meta"
           - "{{ dle_logs_path }}:/home/dblab/logs"
-          - "{{ dle_dump_location }}:{{ dle_dump_location }}"
-          - /sys/kernel/debug:/sys/kernel/debug:rw
-          - /lib/modules:/lib/modules:ro
-          - /proc:/host_proc:ro
         ports:
           - "{{ dle_container_host }}:{{ dle_port }}:2345"
         env:
