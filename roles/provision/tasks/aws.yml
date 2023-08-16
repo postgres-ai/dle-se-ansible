@@ -138,6 +138,11 @@
           assign_public_ip: true
           delete_on_termination: true
         volumes:
+          - device_name: /dev/sda1
+            ebs:
+              volume_type: gp3
+              volume_size: "{{ system_volume_size }}"  # system disk size
+              delete_on_termination: true
           - device_name: /dev/sdb
             ebs:
               volume_type: "{{ volume_type | default('gp3') }}"

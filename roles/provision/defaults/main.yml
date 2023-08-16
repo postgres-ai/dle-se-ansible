@@ -11,6 +11,7 @@ server_location: ""
 server_network: ""  # If specified, the server will be added to this network (must be created in advance).
 volume_size: ""  # This is the storage for zpool_disk (size in gigabytes)
 volume_type: ""  # (optional) The volume type.
+system_volume_size: 40  # system disk size (applicable for aws, gcp).
 state: present  # 'present' to create or 'absent' to delete
 
 ...
