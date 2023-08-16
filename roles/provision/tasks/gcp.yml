@@ -62,7 +62,7 @@
             initialize_params:
               disk_name: "{{ server_name }}-system"
               source_image: "{{ server_image }}"
-              disk_size_gb: 40  # system disk size
+              disk_size_gb: "{{ system_volume_size }}"  # system disk size
           - device_name: "{{ server_name }}-storage"
             auto_delete: true
             type: "{{ volume_type | default('pd-ssd') }}"
