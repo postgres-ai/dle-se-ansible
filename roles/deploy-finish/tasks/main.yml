@@ -1,5 +1,8 @@
 ---
 
+- name: Make sure handlers are flushed immediately
+  meta: flush_handlers
+
 - name: Remove temporary SSH public key from server
   authorized_key:
     user: "{{ system_user.stdout }}"
@@ -10,37 +13,52 @@
     - system_user.stdout is defined
     - hostvars['localhost']['dle_key_result']['ssh_public_key'] is defined
 
-- block:  # TODO: narrow it (and find a way to get rid of double quotes)
-  - name: Print usage instructions
-    run_once: true
-    debug:
-      msg:
-        - "1) Verification token (ensure to securely store it):                            "
-        - "       {{ dle_verification_token }}                                             "
-        - "                                                                                "
-        - "2) Use SSH port forwarding for UI / API / CLI:                                      "
-        - "       ssh -N -L {{ dle_ui_port }}:127.0.0.1:{{ dle_ui_port }} {{ inventory_hostname }} -i YOUR_PRIVATE_KEY     "
-        - "                                                                                "
-        - "3) DBLab UI:          http://127.0.0.1:{{ dle_ui_port }}                                     "
-        - "                                                                                "
-        - "4) DBLab API:                                                                   " 
-        - "  - API URL:          http://127.0.0.1:{{ dle_ui_port }}/api                                 "
-        - "  - API docs:         https://api.dblab.dev/                                    "
-        - "                                                                                "
-        - "5) DBLab CLI:                                                                   "
-        - "  - CLI ('dblab') setup:                                                        "
-        - "        export DBLAB_CLI_VERSION={{ dle_version }}                                          "
-        - "        curl -sSL dblab.sh | bash                                               "
-        - "        dblab init --environment-id={{ cli_environment_id }} --token={{ dle_verification_token }} --url=http://127.0.0.1:{{ dle_ui_port }}/api" 
-        - "  - CLI docs:         https://cli-docs.dblab.dev/                               "
-        - "                                                                                "
-        - "6) Monitoring:                                                                  "
-        - "  - SSH port forwarding:                                                        "
-        - "       ssh -N -L {{ netdata_port }}:127.0.0.1:{{ netdata_port }} {{ inventory_hostname }} -i YOUR_PRIVATE_KEY    "
-        - "  - Monitoring URL:   http://127.0.0.1:{{ netdata_port }}                                     "
-        - "                                                                                "
-        - "7) To connect to clones, also use SSH port forwarding. E.g., for clone 6000:     "
-        - "       ssh -N -L 6000:127.0.0.1:6000 {{ inventory_hostname }} -i YOUR_PRIVATE_KEY      "
-        - "  - and then use: 'host=127.0.0.1 port=6000 user=YOUR_USER dbname=postgres'     "
+- block:
+    - name: Save usage instructions to "{{ dle_base_path}}/usage_instructions.txt"
+      copy:
+        content: |
+          1) Use SSH port forwarding for UI / API / CLI:
+              ssh -o StrictHostKeyChecking=no -N -L {{ dle_ui_port }}:127.0.0.1:{{ dle_ui_port }} {{ inventory_hostname }}
+
+          2) DBLab UI: http://127.0.0.1:{{ dle_ui_port }}
+
+          3) Verification token (ensure to securely store it):
+              {{ dle_verification_token }}
+
+          4) DBLab API:
+            - API URL: http://127.0.0.1:{{ dle_ui_port }}/api
+            - API docs: https://api.dblab.dev/
+
+          5) DBLab CLI:
+            - CLI ('dblab') setup:
+                export DBLAB_CLI_VERSION={{ dle_version }}
+                curl -sSL dblab.sh | bash
+                dblab init --environment-id={{ cli_environment_id }} --token={{ dle_verification_token }} --url=http://127.0.0.1:{{ dle_ui_port }}/api
+            - CLI docs: https://cli-docs.dblab.dev/
+
+          6) Monitoring:
+            - SSH port forwarding:
+                ssh -o StrictHostKeyChecking=no -N -L {{ netdata_port }}:127.0.0.1:{{ netdata_port }} {{ inventory_hostname }}
+            - Monitoring URL: http://127.0.0.1:{{ netdata_port }}
+
+          7) To connect to clones, also use SSH port forwarding. E.g., for clone 6000:
+              ssh -o StrictHostKeyChecking=no -N -L 6000:127.0.0.1:6000 {{ inventory_hostname }}
+            - and then use: 'host=127.0.0.1 port=6000 user=YOUR_USER dbname=postgres'
+
+          (Optional) To destroy the DBLab server (for CLOUD, except BYOM):
+            - add the 'state=absent' variable to the snippet you used for deploy the DBLab server.
+            - run the command again to delete the server.
+        dest: "{{ dle_base_path}}/usage_instructions.txt"
+
+    - name: Read usage instructions
+      command: "cat {{ dle_base_path}}/usage_instructions.txt"
+      register: instructions_output
+      changed_when: false
+
+    - name: Print usage instructions
+      debug:
+        msg: "{{ instructions_output.stdout_lines }}"
+  run_once: true
   tags: info, usage
+
 ...
