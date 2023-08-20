@@ -105,7 +105,7 @@ databaseContainer: &db_container
   # Container parameters, see
   # https://docs.docker.com/engine/reference/run/#runtime-constraints-on-resources
   containerConfig:
-    "shm-size": 1gb # default is 64mb, which is often not enough
+    "shm-size": 4gb # default is 64mb, which is often not enough
 
 # Adjust database configuration
 databaseConfigs: &db_configs
