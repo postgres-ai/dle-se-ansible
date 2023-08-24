@@ -51,7 +51,7 @@ netdata_port: 19999
 
 # Proxy
 proxy_install: false # Set "true" to install Envoy proxy and issue Let's Encrypt certificate
-proxy_dblab_engine_public_port: 446
+proxy_dblab_engine_public_port: 443
 certbot_install_method: pip
 certbot_install_version: 2.6.0
 certbot_create_if_missing: true
