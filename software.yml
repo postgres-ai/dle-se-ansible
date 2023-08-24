@@ -1,0 +1,108 @@
+---
+# TODO
+# - Add firewall role
+# - Envoy in docker
+
+- name: Add host to dblab_group
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  tasks:
+    - name: Add {{ dblab_host }} to dblab_group
+      add_host:
+        name: "{{ dblab_host }}"
+        groups: dblab_group
+      changed_when: false
+      when: dblab_host is defined and dblab_host | length > 1
+      tags: always
+
+# add the path to the temporary ssh key if it is used
+- name: Set facts for dblab_group
+  hosts: dblab_group
+  gather_facts: false
+  tasks:
+    - name: "set_fact: ansible_ssh_private_key_file"
+      set_fact:
+        ansible_ssh_private_key_file: "~{{ lookup('env', 'USER') }}/.ssh/{{ hostvars['localhost']['dblab_tmp_ssh_key_name'] }}"
+      when:
+        - hostvars['localhost']['ssh_key_name'] is defined
+        - hostvars['localhost']['ssh_key_name'] == hostvars['localhost']['dblab_tmp_ssh_key_name']
+      tags: always
+
+- name: Deploy and configure DBLab Engine software
+  hosts: dblab_group
+  become: true
+  become_method: sudo
+  gather_facts: true
+  any_errors_fatal: true
+  vars_files:
+    - vars/main.yml
+  environment: "{{ proxy_env | default({}) }}"
+
+  pre_tasks:
+    - name: Checking Linux distribution
+      fail:
+        msg: "{{ ansible_distribution }} is not supported"
+      when: ansible_distribution not in os_valid_distributions
+      tags: always
+
+    - name: Checking version of OS Linux
+      fail:
+        msg: "{{ ansible_distribution_version }} of {{ ansible_distribution }} is not supported"
+      when: ansible_distribution_version is version_compare(os_minimum_versions[ansible_distribution], '<')
+      tags: always
+
+    - name: Include OS-specific variables
+      include_vars: "vars/{{ ansible_os_family }}.yml"
+      tags: always
+
+    - name: Update apt cache
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+      register: apt_status
+      until: apt_status is success
+      delay: 10
+      retries: 3
+      when: ansible_os_family == "Debian"
+
+    - name: Ensure gnupg and apt-transport-https packages are present
+      apt:
+        pkg:
+          - gnupg
+          - apt-transport-https
+        state: present
+      register: apt_status
+      until: apt_status is success
+      delay: 10
+      retries: 3
+      when: ansible_os_family == "Debian"
+
+    - name: Ensure 'set backupcopy=yes' is in ~/.vimrc
+      lineinfile:
+        path: "~{{ lookup('env', 'USER') }}/.vimrc"
+        line: 'set backupcopy=yes'
+        create: yes  # This will create the file if it doesn't exist
+
+  roles:
+    # Prepare system
+    - role: authorized-keys
+    - role: add-repository
+    - role: packages
+    - role: zpool
+
+    # Configure and start DBLab Engine
+    - role: dblab-engine
+    - role: dblab-cli
+
+    # Proxy server
+    - role: proxy
+
+    # Monitoring
+    - role: netdata
+
+    # finish (connection info)
+    - role: deploy-finish
+
+...

@@ -1,11 +1,11 @@
 ---
-- name: Provision of cloud resources (virtual machine + disk) for DLE (on {{ provision | upper }})
+- name: Provision of cloud resources (virtual machine + disk) for DBLab Engine (on {{ provision | upper }})
   hosts: localhost
   gather_facts: true
   any_errors_fatal: true
   vars_files:
     - vars/main.yml
   roles:
-    - role: provision
+    - role: cloud-resources
       when: provision | lower != 'none'
 ...

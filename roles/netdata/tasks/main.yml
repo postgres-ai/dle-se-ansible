@@ -1,9 +1,9 @@
 ---
 - block:
-    - name: Copy Netdata plugin for DBLab
+    - name: Copy Netdata plugin for DBLab Engine
       template:
         src: templates/netdata_DLE.conf.j2
-        dest: "{{ dle_config_path }}/netdata_DLE.conf"
+        dest: "{{ dblab_engine_config_path }}/netdata_DLE.conf"
         owner: "{{ username }}"
         group: "{{ username }}"
         mode: 0644
@@ -20,7 +20,7 @@
         container_default_behavior: "compatibility"
         volumes:
           - netdataconfig:/etc/netdata
-          - "{{ dle_config_path }}/netdata_DLE.conf:/etc/netdata/charts.d/DLE.conf"
+          - "{{ dblab_engine_config_path }}/netdata_DLE.conf:/etc/netdata/charts.d/DLE.conf"
           - netdatalib:/var/lib/netdata
           - netdatacache:/var/cache/netdata
           - /proc:/host/proc:ro

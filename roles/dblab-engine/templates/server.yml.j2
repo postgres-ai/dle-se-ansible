@@ -17,8 +17,8 @@ server:
   # only to the administrator of the Database Lab instance.
   #
   # Database Lab Engine can be running with an empty verification token, which is not recommended.
-  # In this case, the DLE API and the UI application will not require any credentials.
-  verificationToken: "{{ dle_verification_token }}"
+  # In this case, the DBLab Engine API and the UI application will not require any credentials.
+  verificationToken: "{{ dblab_engine_verification_token }}"
 
   # HTTP server port. Default: 2345.
   port: 2345
@@ -26,12 +26,12 @@ server:
   # Disable modifying configuration via UI/API. Default: false.
   disableConfigModification: false
 
-# Embedded UI. Controls the application to provide a user interface to DLE API.
+# Embedded UI. Controls the application to provide a user interface to DBLab Engine API.
 embeddedUI:
   enabled: true
 
   # Docker image of the UI application.
-  dockerImage: "{{ dle_ui_image }}"
+  dockerImage: "{{ dblab_engine_ui_image }}"
 
   # Host or IP address, from which the embedded UI container accepts HTTP connections.
   # By default, use a loop-back to accept only local connections.
@@ -39,7 +39,7 @@ embeddedUI:
   host: "127.0.0.1"
 
   # HTTP port of the UI application. Default: 2346.
-  port: {{ dle_ui_port }}
+  port: {{ dblab_engine_ui_port }}
 
 global:
   # Database engine. Currently, the only supported option: "postgres".
@@ -131,8 +131,8 @@ provision:
   # Pool of ports for Postgres clones. Ports will be allocated sequentially,
   # starting from the lowest value. The "from" value must be less than "to".
   portPool:
-    from: {{ dle_clone_port_pool.from }}
-    to: {{ dle_clone_port_pool.to }}
+    from: {{ dblab_engine_clone_port_pool.from }}
+    to: {{ dblab_engine_clone_port_pool.to }}
 
   # Use sudo for ZFS/LVM and Docker commands if Database Lab server running
   # outside a container. Keep it "false" (default) when running in a container.
@@ -146,7 +146,7 @@ provision:
   # By default, using a loop-back to accept only local connections.
   # The empty string means "all available addresses".
   # The option supports multiple IPs (using comma-separated format) and IPv6 addresses (for example, [::1])
-  cloneAccessAddresses: "{{ dle_clone_access_addresses }}"
+  cloneAccessAddresses: "{{ dblab_engine_clone_access_addresses }}"
 
 # Data retrieval flow. This section defines both initial retrieval, and rules
 # to keep the data directory in a synchronized state with the source. Both are optional:
@@ -198,7 +198,7 @@ retrieval:
         <<: *db_container
         # The dump file will be automatically created on this location and then used to restore.
         # Ensure that there is enough disk space.
-        dumpLocation: "{{ dle_dump_location }}"
+        dumpLocation: "{{ dblab_engine_dump_location }}"
 
         # Source of data.
         source:
@@ -220,7 +220,7 @@ retrieval:
             password: postgres
 
         # Option for specifying the database list that must be copied.
-        # By default, DLE dumps and restores all available databases.
+        # By default, DBLab Engine dumps and restores all available databases.
         # Do not specify the databases section to take all databases.
         databases:
         #   database1:
@@ -272,10 +272,10 @@ retrieval:
       options:
         <<: *db_container
         # The location of the archive files (or directories, for directory-format archives) to be restored.
-        dumpLocation: "{{ dle_dump_location }}"
+        dumpLocation: "{{ dblab_engine_dump_location }}"
 
         # Use parallel jobs to restore faster.
-        # If your machine with DLE has 4 vCPUs or less, and you don't want to saturate them, use 2 or 1.
+        # If your machine with DBLab Engine has 4 vCPUs or less, and you don't want to saturate them, use 2 or 1.
         parallelJobs: 4
 
         # Ignore errors that occurred during logical data restore. Do not ignore by default.
@@ -286,7 +286,7 @@ retrieval:
         <<: *db_configs
 
         # Option for specifying the database list that must be restored.
-        # By default, DLE restores all available databases.
+        # By default, DBLab Engine restores all available databases.
         # Do not specify the databases section to restore all available databases.
         # databases:
         #   database1:
@@ -371,30 +371,30 @@ diagnostic:
 # Postgres.ai Platform integration (provides GUI) – extends the open source offering.
 # Uncomment the following lines if you need GUI, personal tokens, audit logs, more.
 #
-{% if dle_platform_project_name | length > 0 or dle_platform_org_key | length > 0 %}
+{% if platform_project_name | length > 0 or platform_org_key | length > 0 %}
 platform:
   # Platform API URL. To work with Postgres.ai SaaS, keep it default
   # ("https://postgres.ai/api/general").
-  url: "{{ dle_platform_url | default('https://postgres.ai/api/general') }}"
+  url: "{{ platform_url | default('https://postgres.ai/api/general') }}"
   # Telemetry: anonymous statistics sent to Postgres.ai.
-  # Used to analyze DLE usage, it helps the DLE maintainers make decisions on product development.
-  # Please leave it enabled if possible – this will contribute to DLE development.
+  # Used to analyze DBLab Engine usage, it helps the DBLab Engine maintainers make decisions on product development.
+  # Please leave it enabled if possible – this will contribute to DBLab Engine development.
   # The full list of data points being collected: https://postgres.ai/docs/database-lab/telemetry
   enableTelemetry: true
 
   # Project name
-  projectName: "{{ dle_platform_project_name }}"
+  projectName: "{{ platform_project_name }}"
 
   # Organization key
-  orgKey: "{{ dle_platform_org_key }}"
+  orgKey: "{{ platform_org_key }}"
 {% else %}
 #platform:
   # Platform API URL. To work with Postgres.ai SaaS, keep it default
   # ("https://postgres.ai/api/general").
 #  url: "https://postgres.ai/api/general"
   # Telemetry: anonymous statistics sent to Postgres.ai.
-  # Used to analyze DLE usage, it helps the DLE maintainers make decisions on product development.
-  # Please leave it enabled if possible – this will contribute to DLE development.
+  # Used to analyze DBLab Engine usage, it helps the DBLab Engine maintainers make decisions on product development.
+  # Please leave it enabled if possible – this will contribute to DBLab Engine development.
   # The full list of data points being collected: https://postgres.ai/docs/database-lab/telemetry
 #  enableTelemetry: true
 #

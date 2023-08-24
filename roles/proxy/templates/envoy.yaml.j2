@@ -9,12 +9,12 @@ admin:
 
 static_resources:
   clusters:
-{% for i in range(dle_clone_port_pool.from, dle_clone_port_pool.to + 1) %}
-  - name: dle_clone_{{ i }}
+{% for i in range(dblab_engine_clone_port_pool.from, dblab_engine_clone_port_pool.to + 1) %}
+  - name: dblab_clone_{{ i }}
     connect_timeout: 1s
     type: STRICT_DNS
     load_assignment:
-      cluster_name: dle_clone_{{ i }}
+      cluster_name: dblab_clone_{{ i }}
       endpoints:
       - lb_endpoints:
         - endpoint:
@@ -23,11 +23,11 @@ static_resources:
                 address: 0.0.0.0
                 port_value: {{ i }}
 {% endfor %}
-  - name: dle-ui-http
+  - name: dblab-engine-ui-http
     type: STRICT_DNS
     connect_timeout: 1s
     load_assignment:
-      cluster_name: dle-ui-http
+      cluster_name: dblab-engine-ui-http
       endpoints:
       - lb_endpoints:
         - endpoint:
@@ -60,8 +60,8 @@ static_resources:
                 address: 0.0.0.0
                 port_value: 2500
   listeners:
-{% for i in range(dle_clone_port_pool.from, dle_clone_port_pool.to + 1) %}
-  - name: dle_clone_{{ i + 3000 }}_listener
+{% for i in range(dblab_engine_clone_port_pool.from, dblab_engine_clone_port_pool.to + 1) %}
+  - name: dblab_clone_{{ i + 3000 }}_listener
     address:
       socket_address:
         address: 0.0.0.0
@@ -78,7 +78,7 @@ static_resources:
         typed_config:
           "@type": type.googleapis.com/envoy.extensions.filters.network.tcp_proxy.v3.TcpProxy
           stat_prefix: tcp_postgres
-          cluster: dle_clone_{{ i }}
+          cluster: dblab_clone_{{ i }}
           idle_timeout: 1000s
       transport_socket:
         name: "starttls"
@@ -106,14 +106,14 @@ static_resources:
           route_config:
             name: local_route
             virtual_hosts:
-            - name: dle
+            - name: dblab
               domains:
               - "*"
               routes:
               - match:
                   prefix: "/"
                 route:
-                  cluster: dle-ui-http
+                  cluster: dblab-engine-ui-http
           http_filters:
           - name: envoy.filters.http.router
       transport_socket:

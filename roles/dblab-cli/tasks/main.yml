@@ -8,18 +8,18 @@
       args:
         executable: /bin/bash
 
-    - name: Create CLI configuration directory
+    - name: Create DBLab CLI configuration directory
       file:
-        dest: "{{ dle_base_path }}/cli"
+        dest: "{{ dblab_engine_base_path }}/cli"
         state: directory
         owner: "{{ username }}"
         group: "{{ username }}"
         mode: 0644
 
-    - name: Generate CLI configuration file '{{ dle_base_path }}/cli/cli.yml'
+    - name: Generate DBLab CLI configuration file '{{ dblab_engine_base_path }}/cli/cli.yml'
       template:
         src: templates/cli.yml.j2
-        dest: "{{ dle_base_path }}/cli/cli.yml"
+        dest: "{{ dblab_engine_base_path }}/cli/cli.yml"
         owner: "{{ username }}"
         group: "{{ username }}"
         mode: 0600

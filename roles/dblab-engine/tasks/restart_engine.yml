@@ -3,8 +3,8 @@
 - block:
     - name: Restart DBLab server container
       docker_container:
-        name: "{{ dle_container_name }}"
-        image: "{{ dle_image }}"
+        name: "{{ dblab_engine_container_name }}"
+        image: "{{ dblab_engine_image }}"
         state: started
         restart: yes
         privileged: true
@@ -13,35 +13,35 @@
         volumes:
           - /var/run/docker.sock:/var/run/docker.sock
           - /var/lib/dblab:/var/lib/dblab/:rshared
-          - "{{ dle_config_path }}:/home/dblab/configs"
-          - "{{ dle_meta_path }}:/home/dblab/meta"
-          - "{{ dle_logs_path }}:/home/dblab/logs"
+          - "{{ dblab_engine_config_path }}:/home/dblab/configs"
+          - "{{ dblab_engine_meta_path }}:/home/dblab/meta"
+          - "{{ dblab_engine_logs_path }}:/home/dblab/logs"
         ports:
-          - "{{ dle_container_host }}:{{ dle_port }}:2345"
+          - "{{ dblab_engine_container_host }}:{{ dblab_engine_port }}:2345"
         env:
           DOCKER_API_VERSION: "1.39"
-          DLE_COMPUTING_INFRASTRUCTURE: "{{ dle_computing_infrastructure }}"
+          DLE_COMPUTING_INFRASTRUCTURE: "{{ dblab_engine_computing_infrastructure }}"
 
-    - name: Wait for DBLab API port to be available
+    - name: Wait for DBLab Engine API port to be available
       wait_for:
-        port: "{{ dle_port }}"
+        port: "{{ dblab_engine_port }}"
         host: "localhost"
         state: started
         timeout: 120
         delay: 10
       ignore_errors: false
 
-    - name: Ensure DBLab API is healthy
+    - name: Ensure DBLab Engine API is healthy
       uri:
-        url: "http://localhost:{{ dle_port }}/healthz"
+        url: "http://localhost:{{ dblab_engine_port }}/healthz"
       register: _result
       until: _result.status == 200
       retries: 10
       delay: 10
 
-    - name: Ensure DBLab UI is available
+    - name: Ensure DBLab Engine UI is available
       wait_for:
-        port: "{{ dle_ui_port }}"
+        port: "{{ dblab_engine_ui_port }}"
         host: "localhost"
         state: started
         timeout: 120

@@ -94,7 +94,7 @@
       changed_when: false
       failed_when: false
 
-    - name: Create datasets  # TODO: add handler (docker exec dblab_server kill -SIGHUP 1) to reload DLE config if a new dataset has been created
+    - name: Create datasets  # TODO: add handler (docker exec dblab_server kill -SIGHUP 1) to reload DBLab Engine config if a new dataset has been created
       command: zfs create "{{ zpool_name }}/{{ item }}"
       with_sequence: start={{ datasets_number_result.stdout|int +1 }} count={{ zpool_datasets_number|int - datasets_number_result.stdout|int }} format=dataset_%d
       when: (zpool_status.rc != 0 and zpool_datasets_number|int > 0) or

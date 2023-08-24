@@ -7,8 +7,8 @@
     minimal_ansible_version: 2.10.0
   tasks:
     - add_host:
-        name: "{{ dle_host }}"
-        groups: dle_group
+        name: "{{ dblab_host }}"
+        groups: dblab_group
       changed_when: false
     - name: Checking ansible version
       fail:
@@ -16,7 +16,7 @@
       when: ansible_version.full is version(minimal_ansible_version, '<')
 
 - name: Preparing volume
-  hosts: dle_group
+  hosts: dblab_group
   become: true
   become_method: sudo
   gather_facts: true
