@@ -90,7 +90,7 @@
 
     - name: Generate public URL
       set_fact:
-        dle_public_url: "https://{{ certbot_domain }}:{{ proxy_dle_public_port }}/instance"
+        dblab_engine_public_url: "https://{{ certbot_domain }}:{{ proxy_dblab_engine_public_port }}/instance"
 
   environment: "{{ proxy_env | default({}) }}"
   when:

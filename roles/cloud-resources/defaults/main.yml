@@ -1,8 +1,8 @@
 ---
-provision: none  # or 'aws', 'gcp', 'azure', 'digitalocean', 'hetzner' to create a virtual machine for DLE
+provision: none  # or 'aws', 'gcp', 'azure', 'digitalocean', 'hetzner' to create a virtual machine for DBLab Engine
 
-ssh_key_name: ""  # SSH key to be added to the DLE server. If not specified, all ssh keys will be added (not applicable for aws, gcp).
-ssh_key_content: ""  # (optional) if specified, the contents of the public key will be added to the cloud (for gcp, to the DLE server).
+ssh_key_name: ""  # SSH key to be added to the DBLab Engine server. If not specified, all ssh keys will be added (not applicable for aws, gcp).
+ssh_key_content: ""  # (optional) if specified, the contents of the public key will be added to the cloud (for gcp, to the DBLab Engine server).
 
 server_name: ""
 server_type: ""

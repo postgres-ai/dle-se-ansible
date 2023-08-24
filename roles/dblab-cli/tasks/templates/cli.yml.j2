@@ -1,8 +1,8 @@
 current_environment: {{ cli_environment_id }}
 environments:
   {{ cli_environment_id }}:
-    url: http://{{ dle_container_host }}:{{ dle_port }}
-    token: {{ dle_verification_token }}
+    url: http://{{ dblab_engine_container_host }}:{{ dblab_engine_port }}
+    token: {{ dblab_engine_verification_token }}
     insecure: true
     forwarding:
       server_url: ""

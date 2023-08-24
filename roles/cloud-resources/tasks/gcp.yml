@@ -14,7 +14,7 @@
       run_once: true
       when: ansible_distribution != "MacOSX"
 
-    - name: Install 'google-auth' dependency on controlling host
+    - name: Ensure that 'google-auth' dependency is present on controlling host
       ansible.builtin.pip:
         name: google-auth
         extra_args: --user
@@ -95,13 +95,13 @@
       - Private IP is {{ server_result.networkInterfaces[0].networkIP }}
   when: server_result.id is defined
 
-# set_fact: dle_host
-- name: "set_fact: dle_host (for deploy DLE)"
+# set_fact: dblab_host
+- name: "set_fact: dblab_host (for deploy DBLab Engine)"
   set_fact:
-    dle_host: "root@{{ server_result.networkInterfaces[0].accessConfigs[0].natIP }}"
+    dblab_host: "root@{{ server_result.networkInterfaces[0].accessConfigs[0].natIP }}"
   when: server_result.networkInterfaces is defined
 
-- name: "Wait for host '{{ dle_host }}' to be available via SSH"
+- name: "Wait for host '{{ dblab_host }}' to be available via SSH"
   ansible.builtin.wait_for:
     host: "{{ server_result.networkInterfaces[0].accessConfigs[0].natIP }}"
     port: 22

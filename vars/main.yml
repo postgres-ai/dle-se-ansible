@@ -1,6 +1,6 @@
 ---
 # Server
-provision: none  # or 'aws', 'gcp', 'azure', 'digitalocean', 'hetzner' to create a virtual machine for DLE
+provision: none  # or 'aws', 'gcp', 'azure', 'digitalocean', 'hetzner' to create a virtual machine for DBLab Engine
 
 # System
 username: "root"  # system user, owner of configuration files
@@ -9,35 +9,37 @@ username: "root"  # system user, owner of configuration files
 zpool_disk: ""  # specify an empty disk for the ZFS pool (e.g.: /dev/sdb). If not specified, an attempt will be made to automatically detect an empty volume.
 zpool_name: "dblab_pool"
 zpool_mount_dir: "/var/lib/dblab"
-zpool_datasets_number: 2  # number of datasets for the ZFS pool. When the DLE is deployed, you can increase the number of datasets (if necessary).
+zpool_datasets_number: 2  # number of datasets for the ZFS pool. When the DBLab Engine is deployed, you can increase the number of datasets (if necessary).
 
-# DLE
-dle_verification_token: "some-secret-token"
-dle_base_path: "/root/.dblab"
-dle_config_path: "{{ dle_base_path }}/engine/configs"
-dle_meta_path: "{{ dle_base_path }}/engine/meta"
-dle_logs_path: "{{ dle_base_path }}/engine/logs"
-dle_dump_location: "{{ zpool_mount_dir }}/{{ zpool_name }}/dataset_1/dump"  # Use a dataset directory for dumping data
-dle_container_host: 127.0.0.1
-dle_container_name: dblab_server
-dle_port: 2345
-dle_version: 3.4.0
-dle_image: "postgresai/dblab-server:{{ dle_version | replace('v', '') }}"
-dle_ui_version: "{{ dle_version | replace('v', '') }}"
-dle_ui_image: "postgresai/ce-ui:{{ dle_ui_version }}"
-dle_ui_port: 2346
-dle_platform_project_name: ""  # Project name
-dle_platform_org_key: ""  # Organization key
-dle_computing_infrastructure: "do"
-dle_clone_port_pool:
+# DBLab Engine
+dblab_engine_verification_token: "some-secret-token"
+dblab_engine_base_path: "/root/.dblab"
+dblab_engine_config_path: "{{ dblab_engine_base_path }}/engine/configs"
+dblab_engine_meta_path: "{{ dblab_engine_base_path }}/engine/meta"
+dblab_engine_logs_path: "{{ dblab_engine_base_path }}/engine/logs"
+dblab_engine_dump_location: "{{ zpool_mount_dir }}/{{ zpool_name }}/dataset_1/dump"  # Use a dataset directory for dumping data
+dblab_engine_container_host: 127.0.0.1
+dblab_engine_container_name: dblab_server
+dblab_engine_port: 2345
+dblab_engine_version: 3.4.0
+dblab_engine_image: "postgresai/dblab-server:{{ dblab_engine_version | replace('v', '') }}"
+dblab_engine_ui_version: "{{ dblab_engine_version | replace('v', '') }}"
+dblab_engine_ui_image: "postgresai/ce-ui:{{ dblab_engine_ui_version }}"
+dblab_engine_ui_port: 2346
+dblab_engine_clone_port_pool:
   from: 6000
   to: 6100
-dle_clone_access_addresses: "127.0.0.1"  # IP addresses that can be used to access clones.
+dblab_engine_clone_access_addresses: "127.0.0.1"  # IP addresses that can be used to access clones.
+dblab_engine_computing_infrastructure: "{{ provision }}"
+
+# Platform
+platform_project_name: ""  # Project name
+platform_org_key: ""  # Organization key
 
 # CLI
 cli_install: true
-cli_version: "{{ dle_version | replace('v', '') }}"
-cli_environment_id: "{{ dle_platform_project_name }}"
+cli_version: "{{ dblab_engine_version | replace('v', '') }}"
+cli_environment_id: "{{ platform_project_name }}"
 
 # Monitoring
 
@@ -49,7 +51,7 @@ netdata_port: 19999
 
 # Proxy
 proxy_install: false # Set "true" to install Envoy proxy and issue Let's Encrypt certificate
-proxy_dle_public_port: 446
+proxy_dblab_engine_public_port: 446
 certbot_install_method: pip
 certbot_install_version: 2.6.0
 certbot_create_if_missing: true

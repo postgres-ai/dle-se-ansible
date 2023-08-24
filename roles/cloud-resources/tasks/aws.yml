@@ -14,7 +14,7 @@
       run_once: true
       when: ansible_distribution != "MacOSX"
 
-    - name: Install 'boto3' dependency on controlling host
+    - name: Ensure that 'boto3' dependency is present on controlling host
       ansible.builtin.pip:
         name: boto3
         extra_args: --user
@@ -36,7 +36,8 @@
         state: absent
       when:
         - ssh_key_name is defined
-        - ssh_key_name == 'dle_key_tmp'
+        - dblab_tmp_ssh_key_name is defined
+        - ssh_key_name == dblab_tmp_ssh_key_name
 
     # if ssh_key_name and ssh_key_content is specified, add this ssh key to the cloud
     - name: "AWS: Add SSH key '{{ ssh_key_name }}' to cloud"
@@ -106,18 +107,18 @@
     # Security Group
     - name: "AWS: Create DBLab Security Group"
       amazon.aws.ec2_security_group:
-        name: dle_security_group
+        name: dblab_engine_security_group
         state: present
-        description: Enable ports to access DLE
+        description: Enable ports to access DBLab Engine
         vpc_id: "{{ vpc_id }}"
         region: "{{ server_location }}"
         rules:
           - proto: tcp
             ports:
               - 22
-              - "{{ proxy_dle_public_port }}"
-              - "{{ dle_port }}"
-              - "{{ dle_ui_port }}"
+              - "{{ proxy_dblab_engine_public_port }}"
+              - "{{ dblab_engine_port }}"
+              - "{{ dblab_engine_ui_port }}"
               - "{{ netdata_port }}"
             cidr_ip: 0.0.0.0/0
 
@@ -132,7 +133,7 @@
         image_id: "{{ server_image }}"
         key_name: "{{ ssh_key_name }}"
         region: "{{ server_location }}"
-        security_group: dle_security_group
+        security_group: dblab_engine_security_group
         vpc_subnet_id: "{{ server_network }}"
         network:
           assign_public_ip: true
@@ -169,13 +170,13 @@
       - Private IP is {{ ec2_result.instances[0].private_ip_address }}
   when: ec2_result.instances is defined
 
-# set_fact: dle_host
-- name: "set_fact: dle_host (for deploy DLE)"
+# set_fact: dblab_host
+- name: "set_fact: dblab_host (for deploy DBLab Engine)"
   set_fact:
-    dle_host: "ubuntu@{{ ec2_result.instances[0].public_ip_address }}"
+    dblab_host: "ubuntu@{{ ec2_result.instances[0].public_ip_address }}"
   when: ec2_result.instances is defined
 
-- name: "Wait for host '{{ dle_host }}' to be available via SSH"
+- name: "Wait for host '{{ dblab_host }}' to be available via SSH"
   ansible.builtin.wait_for:
     host: "{{ ec2_result.instances[0].public_ip_address }}"
     port: 22
@@ -195,7 +196,8 @@
   register: ssh_key_result
   when:
     - ssh_key_name is defined
-    - ssh_key_name == 'dle_key_tmp'
+    - dblab_tmp_ssh_key_name is defined
+    - ssh_key_name == dblab_tmp_ssh_key_name
 
 # Delete (if state is absent)
 - name: "AWS: Delete EC2 instance '{{ server_name }}'"
