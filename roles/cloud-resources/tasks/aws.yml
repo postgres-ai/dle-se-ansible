@@ -64,8 +64,8 @@
       register: vpc_subnet_info
       when: server_network | length > 0
 
-    - name: "set_fact: vpc_id"
-      set_fact:
+    - name: "Set variable: vpc_id"
+      ansible.builtin.set_fact:
         vpc_id: "{{ vpc_subnet_info.subnets[0].vpc_id }}"
       when:
         - server_network | length > 0
@@ -90,15 +90,15 @@
         - server_network | length < 1
         - vpc_info.vpcs[0].id is defined
 
-    - name: "set_fact: vpc_id"
-      set_fact:
+    - name: "Set variable: vpc_id"
+      ansible.builtin.set_fact:
         vpc_id: "{{ vpc_info.vpcs[0].id }}"
       when:
         - server_network | length < 1
         - vpc_info.vpcs[0].id is defined
 
-    - name: "set_fact: server_network"
-      set_fact:
+    - name: "Set variable: server_network"
+      ansible.builtin.set_fact:
         server_network: "{{ vpc_subnet_info.subnets[0].id }}"
       when:
         - server_network | length < 1
@@ -159,7 +159,7 @@
 
 # Info
 - name: Show EC2 instance info
-  debug:
+  ansible.builtin.debug:
     msg:
       - instance ID is {{ ec2_result.instances[0].instance_id }}
       - instance Image is {{ ec2_result.instances[0].image_id }}
@@ -171,8 +171,8 @@
   when: ec2_result.instances is defined
 
 # set_fact: dblab_host
-- name: "set_fact: dblab_host (for deploy DBLab Engine)"
-  set_fact:
+- name: "Set variable: dblab_host (for deploy DBLab Engine)"
+  ansible.builtin.set_fact:
     dblab_host: "ubuntu@{{ ec2_result.instances[0].public_ip_address }}"
   when: ec2_result.instances is defined
 

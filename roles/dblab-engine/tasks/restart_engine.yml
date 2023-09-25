@@ -2,11 +2,11 @@
 
 - block:
     - name: Restart DBLab server container
-      docker_container:
+      community.docker.docker_container:
         name: "{{ dblab_engine_container_name }}"
         image: "{{ dblab_engine_image }}"
         state: started
-        restart: yes
+        restart: true
         privileged: true
         restart_policy: unless-stopped
         container_default_behavior: "compatibility"
@@ -23,7 +23,7 @@
           DLE_COMPUTING_INFRASTRUCTURE: "{{ dblab_engine_computing_infrastructure }}"
 
     - name: Wait for DBLab Engine API port to be available
-      wait_for:
+      ansible.builtin.wait_for:
         port: "{{ dblab_engine_port }}"
         host: "localhost"
         state: started
@@ -32,7 +32,7 @@
       ignore_errors: false
 
     - name: Ensure DBLab Engine API is healthy
-      uri:
+      ansible.builtin.uri:
         url: "http://localhost:{{ dblab_engine_port }}/healthz"
       register: _result
       until: _result.status == 200
@@ -40,7 +40,7 @@
       delay: 10
 
     - name: Ensure DBLab Engine UI is available
-      wait_for:
+      ansible.builtin.wait_for:
         port: "{{ dblab_engine_ui_port }}"
         host: "localhost"
         state: started

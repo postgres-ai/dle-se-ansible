@@ -1,11 +1,32 @@
 ---
-- name: Provision of cloud resources (virtual machine + disk) for DBLab Engine (on {{ provision | upper }})
+- name: Provision of cloud resources (virtual machine + disk) for DBLab Engine (on {{ provision | default('none') | upper }})
   hosts: localhost
   gather_facts: true
   any_errors_fatal: true
-  vars_files:
-    - vars/main.yml
+  vars:
+    minimal_ansible_version: 2.11.0
+  pre_tasks:
+    - name: Checking ansible version
+      ansible.builtin.fail:
+        msg: "Ansible version must be {{ minimal_ansible_version }} or higher"
+      delegate_to: localhost
+      when: ansible_version.full is version(minimal_ansible_version, '<')
+
+    - name: Include main variables
+      ansible.builtin.include_vars: vars/main.yml
+
+    - name: Confirm that necessary variables are set
+      ansible.builtin.debug:
+        msg:
+          - "Some required variables have empty values."
+          - "Specify values for variables: 'platform_project_name', 'platform_org_key'."
+          - "For questions, contact Postgres.ai: https://postgres.ai/contact."
+      failed_when: platform_project_name | length < 1 or platform_org_key | length < 1
+      when: platform_project_name | length < 1 or platform_org_key | length < 1
+  tags: always
+
   roles:
     - role: cloud-resources
       when: provision | lower != 'none'
+
 ...

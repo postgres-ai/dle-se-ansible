@@ -1,10 +1,11 @@
 ---
+# yamllint disable rule:line-length
 
 - name: Make sure handlers are flushed immediately
-  meta: flush_handlers
+  ansible.builtin.meta: flush_handlers
 
 - name: Remove temporary SSH public key from server
-  authorized_key:
+  ansible.posix.authorized_key:
     user: "{{ system_user.stdout }}"
     key: "{{ hostvars['localhost']['dblab_tmp_ssh_key_result']['ssh_public_key'] }}"
     state: absent
@@ -14,8 +15,8 @@
     - hostvars['localhost']['dblab_tmp_ssh_key_result']['ssh_public_key'] is defined
 
 - block:
-    - name: Save usage instructions to "{{ dblab_engine_base_path}}/usage_instructions.txt"
-      copy:
+    - name: Save usage instructions to "{{ dblab_engine_base_path }}/usage_instructions.txt"
+      ansible.builtin.copy:
         content: |
           1) Use SSH port forwarding for UI / API / CLI:
               ssh -o StrictHostKeyChecking=no -N -L {{ dblab_engine_ui_port }}:127.0.0.1:{{ dblab_engine_ui_port }} {{ inventory_hostname }}
@@ -48,15 +49,18 @@
           (Optional) To destroy the DBLab server (for CLOUD, except BYOM):
             - add the 'state=absent' variable to the snippet you used for deploy the DBLab server.
             - run the command again to delete the server.
-        dest: "{{ dblab_engine_base_path}}/usage_instructions.txt"
+        dest: "{{ dblab_engine_base_path }}/usage_instructions.txt"
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: "0644"
 
     - name: Read usage instructions
-      command: "cat {{ dblab_engine_base_path}}/usage_instructions.txt"
+      ansible.builtin.command: "cat {{ dblab_engine_base_path }}/usage_instructions.txt"
       register: instructions_output
       changed_when: false
 
     - name: Print usage instructions
-      debug:
+      ansible.builtin.debug:
         msg: "{{ instructions_output.stdout_lines }}"
   run_once: true
   tags: info, usage

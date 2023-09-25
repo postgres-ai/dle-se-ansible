@@ -1,26 +1,216 @@
-image: docker:20.10.22
+stages:
+  - lint
+  - test
+  - build
+  - test-deploy
+  - test-destroy
 
 variables: 
-  # If you're using GitLab Runner 12.7 or earlier with the Kubernetes executor and Kubernetes 1.6 or earlier,
-  # the variable must be set to tcp://localhost:2375 because of how the Kubernetes executor connects services to the job container
-  # https://docs.gitlab.com/ee/ci/docker/using_docker_build.html#docker-in-docker-with-tls-disabled-in-the-docker-executor
-  DOCKER_HOST: tcp://docker:2375
+  DOCKER_HOST: tcp://127.0.0.1:2375
   DOCKER_TLS_CERTDIR: ""
 
-services:
-  - name: docker:20.10.22-dind
-    alias: docker
-    command: ["--tls=false"]
-
 before_script:
-  - docker info
-  - apk update
-  - apk add --no-cache git
+  - export TAG="${CI_COMMIT_TAG:-${CI_COMMIT_REF_SLUG}}"
+  - export TERM=xterm
+
+yamllint:
+  stage: lint
+  script:
+    - make bootstrap-dev
+    - make linter-yamllint
+  tags:
+    - dle-test
+
+ansible-lint:
+  stage: lint
+  script:
+    - make bootstrap-dev
+    - make linter-ansible-lint
+  tags:
+    - dle-test
+
+molecule-test:
+  stage: test
+  script:
+    - make bootstrap-dev
+    - make molecule-test
+  tags:
+    - dle-test
 
 build:
   stage: build
   script:
-    - export build_tag="${CI_COMMIT_TAG:-${CI_COMMIT_REF_SLUG}}" && echo 'Building & pushing container image with tag ${build_tag}'
+    - echo 'Building & pushing container image with tag ${TAG}'
     - echo "${DOCKER_REGISTRY_PASSWORD}" | docker login --username $DOCKER_REGISTRY_USER --password-stdin $DOCKER_REGISTRY
-    - docker build --no-cache -t postgresai/dle-se-ansible:$build_tag .
-    - docker push postgresai/dle-se-ansible:$build_tag
+    - docker build --no-cache -t postgresai/dle-se-ansible:$TAG .
+    - docker push postgresai/dle-se-ansible:$TAG
+  when: manual
+  tags:
+    - dle-test
+
+deploy-test-hetzner:
+  stage: test-deploy
+  script: |
+    docker run --rm \
+      --env HCLOUD_API_TOKEN=${HCLOUD_API_TOKEN} \
+      postgresai/dle-se-ansible:$TAG \
+        ansible-playbook deploy_dle.yml --extra-vars \
+          "provision='hetzner' \
+          server_name='dblab-ci-test-hetzner-$TAG' \
+          server_type='CCX13' \
+          server_image='ubuntu-22.04' \
+          server_location='ash' \
+          volume_size='30' \
+          dblab_engine_verification_token='ci-test-token' \
+          dblab_engine_version='3.4.0' \
+          zpool_datasets_number='2' \
+          platform_org_key=${PLATFORM_ORG_KEY} \
+          platform_url='https://v2.postgres.ai/api/general' \
+          platform_project_name='dblab-ci-test-hetzner-$TAG'"
+  when: manual
+  tags:
+    - dle-test
+
+destroy-test-hetzner:
+  stage: test-destroy
+  script: |
+    docker run --rm \
+      --env HCLOUD_API_TOKEN=${HCLOUD_API_TOKEN} \
+      postgresai/dle-se-ansible:$TAG \
+        ansible-playbook cloud_resources.yml --extra-vars \
+          "provision='hetzner' \
+          server_name='dblab-ci-test-hetzner-$TAG' \
+          server_type='CCX13' \
+          server_location='ash' \
+          state='absent' \
+          platform_org_key=${PLATFORM_ORG_KEY} \
+          platform_project_name='dblab-ci-test-hetzner-$TAG'"
+  when: manual
+  tags:
+    - dle-test
+
+deploy-test-digitalocean:
+  stage: test-deploy
+  script: |
+    docker run --rm \
+      --env DO_API_TOKEN=${DO_API_TOKEN} \
+      postgresai/dle-se-ansible:$TAG \
+        ansible-playbook deploy_dle.yml --extra-vars \
+          "provision='digitalocean' \
+          server_name='dblab-ci-test-digitalocean-$TAG' \
+          server_type='g-2vcpu-8gb' \
+          server_image='ubuntu-22-04-x64' \
+          server_location='nyc1' \
+          volume_size='30' \
+          dblab_engine_verification_token='ci-test-token' \
+          dblab_engine_version='3.4.0' \
+          zpool_datasets_number='2' \
+          platform_org_key=${PLATFORM_ORG_KEY} \
+          platform_url='https://v2.postgres.ai/api/general' \
+          platform_project_name='dblab-ci-test-digitalocean-$TAG'"
+  when: manual
+  tags:
+    - dle-test
+
+destroy-test-digitalocean:
+  stage: test-destroy
+  script: |
+    docker run --rm \
+      --env DO_API_TOKEN=${DO_API_TOKEN} \
+      postgresai/dle-se-ansible:$TAG \
+        ansible-playbook cloud_resources.yml --extra-vars \
+          "provision='digitalocean' \
+          server_name='dblab-ci-test-digitalocean-$TAG' \
+          server_type='g-2vcpu-8gb' \
+          server_location='nyc1' \
+          state='absent' \
+          platform_org_key=${PLATFORM_ORG_KEY} \
+          platform_project_name='dblab-ci-test-digitalocean-$TAG'"
+  when: manual
+  tags:
+    - dle-test
+
+deploy-test-aws:
+  stage: test-deploy
+  script: |
+    docker run --rm \
+      --env AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} \
+      --env AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} \
+      postgresai/dle-se-ansible:$TAG \
+        ansible-playbook deploy_dle.yml --extra-vars \
+          "provision='aws' \
+          server_name='dblab-ci-test-aws-$TAG' \
+          server_type='t2.medium' \
+          server_image='ami-07d445a5585fce0a1' \
+          server_location='us-east-2' \
+          volume_size='30' \
+          dblab_engine_verification_token='ci-test-token' \
+          dblab_engine_version='3.4.0' \
+          zpool_datasets_number='2' \
+          platform_org_key=${PLATFORM_ORG_KEY} \
+          platform_url='https://v2.postgres.ai/api/general' \
+          platform_project_name='dblab-ci-test-aws-$TAG'"
+  when: manual
+  tags:
+    - dle-test
+
+destroy-test-aws:
+  stage: test-destroy
+  script: |
+    docker run --rm \
+      --env AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} \
+      --env AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} \
+      postgresai/dle-se-ansible:$TAG \
+        ansible-playbook cloud_resources.yml --extra-vars \
+          "provision='aws' \
+          server_name='dblab-ci-test-aws-$TAG' \
+          server_type='t2.medium' \
+          server_location='us-east-2' \
+          state='absent' \
+          platform_org_key=${PLATFORM_ORG_KEY} \
+          platform_project_name='dblab-ci-test-aws-$TAG'"
+  when: manual
+  tags:
+    - dle-test
+
+# TODO
+#deploy-test-gcp:
+#  stage: test-deploy
+#  script: |
+#    docker run --rm \
+#      --env GCP_SERVICE_ACCOUNT_CONTENTS="${GCP_SERVICE_ACCOUNT_CONTENTS}" \
+#      postgresai/dle-se-ansible:$TAG \
+#        ansible-playbook deploy_dle.yml --extra-vars \
+#          "provision='gcp' \
+#          server_name='dblab-ci-test-gcp-$TAG' \
+#          server_type='n2-standard-2' \
+#          server_image='projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts' \
+#          server_location='us-central1' \
+#          volume_size='30' \
+#          dblab_engine_verification_token='ci-test-token' \
+#          dblab_engine_version='3.4.0' \
+#          zpool_datasets_number='2' \
+#          platform_org_key=${PLATFORM_ORG_KEY} \
+#          platform_url='https://v2.postgres.ai/api/general' \
+#          platform_project_name='dblab-ci-test-gcp-$TAG'"
+#  when: manual
+#  tags:
+#    - dle-test
+
+#destroy-test-gcp:
+#  stage: test-destroy
+#  script: |
+#    docker run --rm \
+#      --env GCP_SERVICE_ACCOUNT_CONTENTS="${GCP_SERVICE_ACCOUNT_CONTENTS}" \
+#      postgresai/dle-se-ansible:$TAG \
+#        ansible-playbook cloud_resources.yml --extra-vars \
+#          "provision='gcp' \
+#          server_name='dblab-ci-test-gcp-$TAG' \
+#          server_type='n2-standard-2' \
+#          server_location='us-central1' \
+#          state='absent' \
+#          platform_org_key=${PLATFORM_ORG_KEY} \
+#          platform_project_name='dblab-ci-test-gcp-$TAG'"
+#  when: manual
+#  tags:
+#    - dle-test

@@ -1,6 +1,6 @@
 ---
 - name: Check if ZFS pool already exists
-  command: "zpool status -v {{ zpool_name }}"
+  ansible.builtin.command: "zpool status -v {{ zpool_name }}"
   register: zpool_status
   changed_when: false
   failed_when: false
@@ -11,7 +11,7 @@
 # Create zpool
 - block:  # if the zpool_disk variable is not defined, try to detect an empty disk
     - name: Detect empty volume
-      shell: |
+      ansible.builtin.shell: |
         set -o pipefail;
         lsblk -e7 --output NAME,FSTYPE,TYPE --json \
           | jq -r '.blockdevices[] | select(.children == null and .fstype == null and .type == "disk") | .name'
@@ -22,13 +22,13 @@
 
     # Stop, if empty volume is not detected
     - name: Empty volume is not detected
-      fail:
+      ansible.builtin.fail:
         msg: "Whoops! The empty volume is not detected."
       when: zpool_volume.stdout is defined and zpool_volume.stdout | length < 1
 
     # if empty disk is detected, use it
     - name: Create zpool (use '/dev/{{ zpool_volume.stdout }}')
-      command: >-
+      ansible.builtin.command: >-
         zpool create -f
         -O compression=on
         -O atime=off
@@ -46,18 +46,19 @@
 
 - block:  # if the zpool_disk variable is defined, use this disk
     - name: "Read device information for '{{ zpool_disk }}'"
-      shell: |
+      ansible.builtin.shell: |
         set -o pipefail;
         lsblk {{ zpool_disk }} --output FSTYPE,MOUNTPOINT,TYPE --json | jq -r '.blockdevices'
       args:
         executable: /bin/bash
       register: lsblk_result
       changed_when: false
+      when: zpool_disk != '/dev/zfs_file' # Exclude a task for CI/CD tests (zfs_file not a block device)
 
     # Stop, if the disk contains mountpoint or file system (except when the file system type is equal to zfs_member)
     # it is acceptable if the disk contains empty partitions
     - name: Check that disk does not contain mount points or filesystem
-      fail:
+      ansible.builtin.fail:
         msg:
           - "Disk '{{ zpool_disk }}' is not empty (mountpoint: '{{ item.mountpoint }}', fstype: '{{ item.fstype }}')."
       when: (item.mountpoint is defined and item.mountpoint != None) or
@@ -65,7 +66,7 @@
       loop: "{{ lsblk_result.stdout }}"
 
     - name: Create zpool (use '{{ zpool_disk }}')
-      command: >-
+      ansible.builtin.command: >-
         zpool create -f
         -O compression=on
         -O atime=off
@@ -85,7 +86,7 @@
 # Create datasets
 - block:
     - name: "Check number of datasets for '{{ zpool_name }}'"
-      shell: |
+      ansible.builtin.shell: |
         set -o pipefail;
         zfs list -t filesystem | grep {{ zpool_name }} | grep -c dataset
       args:
@@ -95,8 +96,8 @@
       failed_when: false
 
     - name: Create datasets  # TODO: add handler (docker exec dblab_server kill -SIGHUP 1) to reload DBLab Engine config if a new dataset has been created
-      command: zfs create "{{ zpool_name }}/{{ item }}"
-      with_sequence: start={{ datasets_number_result.stdout|int +1 }} count={{ zpool_datasets_number|int - datasets_number_result.stdout|int }} format=dataset_%d
+      ansible.builtin.command: zfs create "{{ zpool_name }}/{{ item }}"
+      with_sequence: start={{ datasets_number_result.stdout | int + 1 }} count={{ zpool_datasets_number | int - datasets_number_result.stdout | int }} format={{ zpool_datasets_name }}_%d  # yamllint disable rule:line-length
       when: (zpool_status.rc != 0 and zpool_datasets_number|int > 0) or
             (zpool_status.rc == 0 and zpool_datasets_number|int > datasets_number_result.stdout|int)
   when:

@@ -1,0 +1,27 @@
+---
+- name: Molecule.default.converge
+  hosts: all
+  gather_facts: true
+  become: true
+
+  tasks:
+    - name: Converge | Set variables for DBLab Engine deployment test
+      ansible.builtin.set_fact:
+        provision: "none"
+        username: "root"
+        dblab_engine_verification_token: "test-token"
+        dblab_engine_port: 23450
+        dblab_engine_ui_port: 23460
+        zpool_name: "dblab_pool"  # the name of the pool created on the host (must be pre-created)
+        zpool_mount_dir: "/var/lib/dblab"  # the mount path on the host (must match the path in volumes in the molecule.yml)
+        zpool_datasets_name: "molecule_test_dataset"
+        zpool_datasets_number: 2
+        platform_project_name: "test"
+        platform_org_key: "test"
+        cli_install: true
+        proxy_install: true
+        netdata_install: true
+        cacheable: true
+
+- name: DBLab Engine deployment test
+  ansible.builtin.import_playbook: ../../deploy_dle.yml

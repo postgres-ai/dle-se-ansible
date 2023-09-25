@@ -6,11 +6,9 @@
 - name: Add host to dblab_group
   hosts: localhost
   gather_facts: false
-  vars_files:
-    - vars/main.yml
   tasks:
     - name: Add {{ dblab_host }} to dblab_group
-      add_host:
+      ansible.builtin.add_host:
         name: "{{ dblab_host }}"
         groups: dblab_group
       changed_when: false
@@ -22,8 +20,8 @@
   hosts: dblab_group
   gather_facts: false
   tasks:
-    - name: "set_fact: ansible_ssh_private_key_file"
-      set_fact:
+    - name: "Set variable: ansible_ssh_private_key_file"
+      ansible.builtin.set_fact:
         ansible_ssh_private_key_file: "~{{ lookup('env', 'USER') }}/.ssh/{{ hostvars['localhost']['dblab_tmp_ssh_key_name'] }}"
       when:
         - hostvars['localhost']['ssh_key_name'] is defined
@@ -36,29 +34,49 @@
   become_method: sudo
   gather_facts: true
   any_errors_fatal: true
-  vars_files:
-    - vars/main.yml
   environment: "{{ proxy_env | default({}) }}"
-
+  vars:
+    minimal_ansible_version: 2.11.0
+    minimal_dblab_engine_version: 3.4.0
   pre_tasks:
-    - name: Checking Linux distribution
-      fail:
-        msg: "{{ ansible_distribution }} is not supported"
-      when: ansible_distribution not in os_valid_distributions
-      tags: always
-
-    - name: Checking version of OS Linux
-      fail:
-        msg: "{{ ansible_distribution_version }} of {{ ansible_distribution }} is not supported"
-      when: ansible_distribution_version is version_compare(os_minimum_versions[ansible_distribution], '<')
-      tags: always
+    - name: Include main variables
+      ansible.builtin.include_vars: vars/main.yml
 
     - name: Include OS-specific variables
-      include_vars: "vars/{{ ansible_os_family }}.yml"
-      tags: always
+      ansible.builtin.include_vars: "vars/{{ ansible_os_family }}.yml"
+
+    - name: Checking ansible version
+      ansible.builtin.fail:
+        msg: "Ansible version must be {{ minimal_ansible_version }} or higher"
+      delegate_to: localhost
+      when: ansible_version.full is version(minimal_ansible_version, '<')
+
+    - name: Checking DBLab Engine version
+      ansible.builtin.fail:
+        msg: "DBLab Engine version must be {{ minimal_dblab_engine_version }} or higher"
+      when: dblab_engine_version | regex_replace('^v', '') | regex_replace('-rc.+$', '') is version(minimal_dblab_engine_version, '<')
+
+    - name: Checking Linux distribution
+      ansible.builtin.fail:
+        msg: "{{ ansible_distribution }} is not supported"
+      when: ansible_distribution not in os_valid_distributions
+
+    - name: Checking version of OS Linux
+      ansible.builtin.fail:
+        msg: "{{ ansible_distribution_version }} of {{ ansible_distribution }} is not supported"
+      when: ansible_distribution_version is version_compare(os_minimum_versions[ansible_distribution], '<')
+
+    - name: Confirm that necessary variables are set
+      ansible.builtin.debug:
+        msg:
+          - "Some required variables have empty values."
+          - "Specify values for variables: 'platform_project_name', 'platform_org_key'."
+          - "For questions, contact Postgres.ai: https://postgres.ai/contact."
+      failed_when: platform_project_name | length < 1 or platform_org_key | length < 1
+      when: platform_project_name | length < 1 or platform_org_key | length < 1
 
     - name: Update apt cache
-      apt:
+      ansible.builtin.apt:
         update_cache: true
         cache_valid_time: 3600
       register: apt_status
@@ -67,10 +85,11 @@
       retries: 3
       when: ansible_os_family == "Debian"
 
-    - name: Ensure gnupg and apt-transport-https packages are present
-      apt:
+    - name: Ensure gnupg, gpg-agent, and apt-transport-https packages are present
+      ansible.builtin.apt:
         pkg:
           - gnupg
+          - gpg-agent
           - apt-transport-https
         state: present
       register: apt_status
@@ -80,10 +99,14 @@
       when: ansible_os_family == "Debian"
 
     - name: Ensure 'set backupcopy=yes' is in ~/.vimrc
-      lineinfile:
-        path: "~{{ lookup('env', 'USER') }}/.vimrc"
+      ansible.builtin.lineinfile:
+        path: "~{{ username }}/.vimrc"
         line: 'set backupcopy=yes'
-        create: yes  # This will create the file if it doesn't exist
+        create: true  # This will create the file if it doesn't exist
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: "0600"
+  tags: always
 
   roles:
     # Prepare system

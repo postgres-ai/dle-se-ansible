@@ -1,39 +1,40 @@
 ---
 - block:
-  - name: "Read device information for '{{ zpool_disk }}'"
-    shell: |
-      set -o pipefail;
-      lsblk {{ zpool_disk }} --output FSTYPE,MOUNTPOINT,TYPE --json | jq -r '.blockdevices'
-    args:
-      executable: /bin/bash
-    register: lsblk_result
-    changed_when: false
+    - name: "Read device information for '{{ zpool_disk }}'"
+      ansible.builtin.shell: |
+        set -o pipefail;
+        lsblk {{ zpool_disk }} --output FSTYPE,MOUNTPOINT,TYPE --json | jq -r '.blockdevices'
+      args:
+        executable: /bin/bash
+      register: lsblk_result
+      changed_when: false
 
-  - name: "Print device information for '{{ zpool_disk }}'"
-    debug:
-      msg: "{{ lsblk_result.stdout }}"
+    - name: "Print device information for '{{ zpool_disk }}'"
+      ansible.builtin.debug:
+        msg: "{{ lsblk_result.stdout }}"
 
-  # Stop, if the disk contains the root mountpoint
-  - name: Check for root mountpoint
-    fail:
-      msg:
-       - "Invalid mountpoint: '/'"
-       - "The disk contains the root file system. Please make sure that you have specified the correct disk in the zpool_disk variable."
-    when: item.mountpoint is defined and item.mountpoint == '/'
-    loop: "{{ lsblk_result.stdout }}"
+    # Stop, if the disk contains the root mountpoint
+    - name: Check for root mountpoint
+      ansible.builtin.fail:
+        msg:
+          - "Invalid mountpoint: '/'"
+          - "The disk contains the root file system. Please make sure that you have specified the correct disk in the zpool_disk variable."
+      when: item.mountpoint is defined and item.mountpoint == '/'
+      loop: "{{ lsblk_result.stdout }}"
 
-  - name: "Umount all mountpoints for '{{ zpool_disk }}' (if mounted)"
-    command: "umount -q {{ item.mountpoint }}"
-    when: item.mountpoint is defined and item.mountpoint != None
-    loop: "{{ lsblk_result.stdout }}"
+    - name: "Umount all mountpoints for '{{ zpool_disk }}' (if mounted)"
+      ansible.builtin.command: "umount -q {{ item.mountpoint }}"
+      when: item.mountpoint is defined and item.mountpoint != None
+      loop: "{{ lsblk_result.stdout }}"
 
-  - name: "Clean up device '{{ zpool_disk }}'"
-    command: "wipefs -fa {{ zpool_disk }}"
-    when: (item.fstype is defined and item.fstype != None) or
-          (item.type is defined and item.type == "part")
-    loop: "{{ lsblk_result.stdout }}"
+    - name: "Clean up device '{{ zpool_disk }}'"
+      ansible.builtin.command: "wipefs -fa {{ zpool_disk }}"
+      when: (item.fstype is defined and item.fstype != None) or
+            (item.type is defined and item.type == "part")
+      loop: "{{ lsblk_result.stdout }}"
   when:
     - zpool_disk is defined
     - zpool_disk | length > 0
   tags: volume
+
 ...

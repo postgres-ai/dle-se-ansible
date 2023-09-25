@@ -1,42 +1,12 @@
 ---
 
-# pre-checks
-- name: Perform pre-checks
-  hosts: localhost
-  gather_facts: false
-  vars_files:
-    - vars/main.yml
-  vars:
-    minimal_ansible_version: 2.11.0
-    minimal_dblab_engine_version: 3.4.0
-  tasks:
-    - name: Checking ansible version
-      fail:
-        msg: "Ansible version must be {{ minimal_ansible_version }} or higher"
-      when: ansible_version.full is version(minimal_ansible_version, '<')
-
-    - name: Checking DBLab Engine version
-      fail:
-        msg: "DBLab Engine version must be {{ minimal_dblab_engine_version }} or higher"
-      when: dblab_engine_version | regex_replace('^v', '') | regex_replace('-rc.+$', '') is version(minimal_dblab_engine_version, '<')
-
-    - name: Confirm that necessary variables are set
-      debug:
-        msg:
-          - "Some required variables have empty values."
-          - "Specify values for variables: 'platform_project_name', 'platform_org_key'."
-          - "For questions, contact Postgres.ai: https://postgres.ai/contact."
-      failed_when: platform_project_name | length < 1 or platform_org_key | length < 1
-      when: platform_project_name | length < 1 or platform_org_key | length < 1
-  tags: always
-
-# Create a virtual machine for DBLab Engine (if provision != 'none')
-- import_playbook: cloud_resources.yml
+- name: Create a virtual machine for DBLab Engine
+  ansible.builtin.import_playbook: cloud_resources.yml
   when: provision | lower != 'none'
   tags: aws, gcp, azure, digitalocean, hetzner
 
-# Deploy and configure DBLab Engine software
-- import_playbook: software.yml
+- name: Deploy and configure DBLab Engine software
+  ansible.builtin.import_playbook: software.yml
   tags: dblab, dblab_engine
 
 ...

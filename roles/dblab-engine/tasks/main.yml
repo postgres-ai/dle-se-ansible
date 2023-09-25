@@ -1,61 +1,64 @@
 ---
 - block:
-  - name: Create configuration and logs directories
-    file:
-      dest: "{{ dir_item }}"
-      state: directory
-    loop:
-      - "{{ dblab_engine_config_path }}"
-      - "{{ dblab_engine_meta_path }}"
-      - "{{ dblab_engine_logs_path }}"
-      - "{{ dblab_engine_dump_location }}"
-    loop_control:
-      loop_var: dir_item
-    tags: dblab_engine_conf
+    - name: Create configuration and logs directories
+      ansible.builtin.file:
+        dest: "{{ dir_item }}"
+        state: directory
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: "0644"
+      loop:
+        - "{{ dblab_engine_config_path }}"
+        - "{{ dblab_engine_meta_path }}"
+        - "{{ dblab_engine_logs_path }}"
+        - "{{ dblab_engine_dump_location }}"
+      loop_control:
+        loop_var: dir_item
+      tags: dblab_engine_conf
 
-  # if dblab_engine_config_file is defined, copy the server.yml file
-  - name: Copy DBLab Engine configuration file to '{{ dblab_engine_config_path }}/server.yml'
-    copy:
-      src: "{{ dblab_engine_config_file }}"
-      dest: "{{ dblab_engine_config_path }}/server.yml"
-      owner: "{{ username }}"
-      group: "{{ username }}"
-      mode: 0644
-    notify: "restart dblab_server"
-    when:
-      - dblab_engine_config_file is defined
-      - dblab_engine_config_file | length > 0
-    tags: dblab_engine_conf
+    # if dblab_engine_config_file is defined, copy the server.yml file
+    - name: Copy DBLab Engine configuration file to '{{ dblab_engine_config_path }}/server.yml'
+      ansible.builtin.copy:
+        src: "{{ dblab_engine_config_file }}"
+        dest: "{{ dblab_engine_config_path }}/server.yml"
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: "0644"
+      notify: "restart dblab_server"
+      when:
+        - dblab_engine_config_file is defined
+        - dblab_engine_config_file | length > 0
+      tags: dblab_engine_conf
 
-  # if dblab_engine_config_file is not defined, generate a new server.yml from the jinja template
-  - name: Generate DBLab Engine configuration file '{{ dblab_engine_config_path }}/server.yml'
-    template:
-      src: templates/server.yml.j2
-      dest: "{{ dblab_engine_config_path }}/server.yml"
-      owner: "{{ username }}"
-      group: "{{ username }}"
-      mode: 0644
-    notify: "restart dblab_server"
-    when: dblab_engine_config_file is not defined or
-          dblab_engine_config_file | length < 1
-    tags: dblab_engine_conf
+    # if dblab_engine_config_file is not defined, generate a new server.yml from the jinja template
+    - name: Generate DBLab Engine configuration file '{{ dblab_engine_config_path }}/server.yml'
+      ansible.builtin.template:
+        src: templates/server.yml.j2
+        dest: "{{ dblab_engine_config_path }}/server.yml"
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: "0644"
+      notify: "restart dblab_server"
+      when: dblab_engine_config_file is not defined or
+            dblab_engine_config_file | length < 1
+      tags: dblab_engine_conf
 
-  - name: Create file 'pending.retrieval'
-    file:
-      path: "{{ dblab_engine_meta_path }}/pending.retrieval"
-      state: touch
-      owner: "{{ username }}"
-      group: "{{ username }}"
-      mode: u=rw,g=rw,o=rw
-      modification_time: preserve
-      access_time: preserve
-    when: dblab_engine_config_file is not defined or
-          dblab_engine_config_file | length < 1
+    - name: Create file 'pending.retrieval'
+      ansible.builtin.file:
+        path: "{{ dblab_engine_meta_path }}/pending.retrieval"
+        state: touch
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: u=rw,g=rw,o=rw
+        modification_time: preserve
+        access_time: preserve
+      when: dblab_engine_config_file is not defined or
+            dblab_engine_config_file | length < 1
   tags: dle
 
 - block:
     - name: Ensure that DBLab server container is running
-      docker_container:
+      community.docker.docker_container:
         name: "{{ dblab_engine_container_name }}"
         image: "{{ dblab_engine_image }}"
         state: started
@@ -76,7 +79,7 @@
       register: dblab_server_start
 
     - name: Wait for DBLab Engine API port to be available
-      wait_for:
+      ansible.builtin.wait_for: # noqa no-handler
         port: "{{ dblab_engine_port }}"
         host: "localhost"
         state: started
@@ -85,7 +88,7 @@
       when: dblab_server_start is changed
 
     - name: Ensure DBLab Engine API is healthy
-      uri:
+      ansible.builtin.uri:
         url: "http://localhost:{{ dblab_engine_port }}/healthz"
       register: _result
       until: _result.status == 200
@@ -93,7 +96,7 @@
       delay: 10
 
     - name: Ensure DBLab Engine UI is available
-      wait_for:
+      ansible.builtin.wait_for:
         port: "{{ dblab_engine_ui_port }}"
         host: "localhost"
         state: started

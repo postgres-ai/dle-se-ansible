@@ -1,19 +1,28 @@
 ---
 # Debian
-- name: Install system packages
-  ansible.builtin.apt:
-    name: "{{ item }}"
-    state: present
-  loop: "{{ system_packages }}"
-  register: apt_status
-  until: apt_status is success
-  delay: 10
-  retries: 3
+- block:
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: true
+      register: apt_status
+      until: apt_status is success
+      delay: 10
+      retries: 3
+
+    - name: Install system packages
+      ansible.builtin.apt:
+        name: "{{ item }}"
+        state: present
+      loop: "{{ system_packages }}"
+      register: apt_status
+      until: apt_status is success
+      delay: 10
+      retries: 3
   environment: "{{ proxy_env | default({}) }}"
   when: ansible_os_family == "Debian"
   tags: install_packages
 
-# TODO: Remove this task once pip install is added in 'ansible-role-certbot' 
+# TODO: Remove this task once pip install is added in 'ansible-role-certbot'
 # See: https://github.com/geerlingguy/ansible-role-certbot/pull/189
 - block:
     - name: "Install Certbot {{ certbot_install_version }} using pip"
@@ -24,7 +33,7 @@
         umask: "0022"
 
     - name: Set certbot_script variable
-      set_fact:
+      ansible.builtin.set_fact:
         certbot_script: "/usr/local/bin/certbot"
   when:
     - proxy_install | bool
