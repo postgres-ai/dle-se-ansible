@@ -2,21 +2,23 @@
 
 - block:  # Debian/Ubuntu
     - name: Add repository apt-key
-      apt_key:
+      ansible.builtin.apt_key:
         url: "{{ item.key }}"
         state: present
+        keyring: /etc/apt/trusted.gpg.d/{{ item.key | urlsplit('netloc') }}.gpg
       loop: "{{ apt_repository_keys }}"
       when: apt_repository_keys | length > 0
 
     - name: Add repository apt-key from keyserver
-      apt_key:
+      ansible.builtin.apt_key:
         keyserver: "{{ item.keyserver }}"
         id: "{{ item.id }}"
+        keyring: /etc/apt/trusted.gpg.d/{{ item.id }}.gpg
       loop: "{{ apt_repository_keyservers }}"
       when: apt_repository_keyservers | length > 0
 
     - name: Add repository
-      apt_repository:
+      ansible.builtin.apt_repository:
         repo: "{{ item.repo }}"
         state: present
         update_cache: true

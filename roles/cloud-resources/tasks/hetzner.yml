@@ -66,7 +66,7 @@
         - ssh_keys.hcloud_ssh_key_info | length < 1
 
     - name: "Hetzner Cloud: set_fact ssh_key_names"
-      set_fact:
+      ansible.builtin.set_fact:
         ssh_key_names: "{{ ssh_key_names | default([]) + [item.name] }}"
       loop: "{{ ssh_keys.hcloud_ssh_key_info }}"
       no_log: true  # do not display the public key
@@ -86,7 +86,7 @@
         - (ssh_public_keys is not defined or ssh_public_keys | length < 1)
 
     - name: "Hetzner Cloud: Get names of all SSH keys"
-      set_fact:
+      ansible.builtin.set_fact:
         ssh_key_names: "{{ ssh_key_names | default([]) + [item.name] }}"
       loop: "{{ ssh_keys.hcloud_ssh_key_info }}"
       loop_control:  # do not display the public key
@@ -112,7 +112,7 @@
       register: server_result
 
     - name: "Hetzner Cloud: Add server to network '{{ server_network }}'"
-      hcloud_server_network:
+      hetzner.hcloud.hcloud_server_network:
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
         network: "{{ server_network }}"
         server: "{{ server_name | lower }}"
@@ -130,13 +130,13 @@
 
 # Info
 - name: Show Server info
-  debug:
+  ansible.builtin.debug:
     var: server_result.hcloud_server
   when: server_result.hcloud_server is defined
 
 # set_fact: dblab_host
-- name: "set_fact: dblab_host (for deploy DBLab Engine)"
-  set_fact:
+- name: "Set variable: dblab_host (for deploy DBLab Engine)"
+  ansible.builtin.set_fact:
     dblab_host: "root@{{ server_result.hcloud_server.ipv4_address }}"
   when: server_result.hcloud_server is defined
 

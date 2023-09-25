@@ -2,25 +2,28 @@
 # Install Envoy Proxy
 - block:  # Debian/Ubuntu
     - name: Download Envoy repository apt-key
-      get_url:
+      ansible.builtin.get_url:
         url: "https://deb.dl.getenvoy.io/public/gpg.8115BA8E629CC074.key"
         dest: /tmp/gpg.8115BA8E629CC074.key
         timeout: 60
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: "0644"
 
     - name: Add Envoy repository apt-key
-      apt_key:
+      ansible.builtin.apt_key:
         id: 8115BA8E629CC074
         file: /tmp/gpg.8115BA8E629CC074.key
         state: present
 
     - name: Add Envoy repository
-      apt_repository:
+      ansible.builtin.apt_repository:
         repo: "deb [arch=amd64] https://deb.dl.getenvoy.io/public/deb/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} main"
         state: present
         update_cache: true
 
     - name: Install Envoy Proxy
-      apt:
+      ansible.builtin.apt:
         name: "getenvoy-envoy"
         state: "present"
       register: apt_status
@@ -37,7 +40,7 @@
 # Configure Envoy Proxy
 - block:
     - name: Create 'envoy' config directory
-      file:
+      ansible.builtin.file:
         path: /etc/envoy/
         state: directory
         owner: root
@@ -45,7 +48,7 @@
         mode: "0777"
 
     - name: Create 'certs' sub-directory
-      file:
+      ansible.builtin.file:
         path: /etc/envoy/certs
         state: directory
         owner: root
@@ -53,13 +56,13 @@
         mode: "0777"
 
     - name: Generate certificate
-      include_role:
+      ansible.builtin.include_role:
         name: geerlingguy.certbot
       vars:
         certbot_create_standalone_stop_services: [envoy]
 
     - name: Create link to directory with certificates
-      file:
+      ansible.builtin.file:
         src: "{{ item.src }}"
         dest: "{{ item.dest }}"
         mode: o+r
@@ -71,7 +74,7 @@
         - { dest: /etc/envoy/certs/privkey1.pem, src: "/etc/letsencrypt/live/{{ certbot_domain }}/privkey.pem" }
 
     - name: Copy templates
-      template:
+      ansible.builtin.template:
         src: "{{ item.src }}"
         dest: "{{ item.dest }}"
         owner: root
@@ -83,13 +86,13 @@
         - { src: envoy.deploy.j2, dest: /etc/letsencrypt/renewal-hooks/deploy/envoy.deploy }
 
     - name: Enable and restart Envoy service
-      service:
+      ansible.builtin.service:
         name: envoy
-        enabled: yes
+        enabled: true
         state: restarted
 
     - name: Generate public URL
-      set_fact:
+      ansible.builtin.set_fact:
         dblab_engine_public_url: "https://{{ certbot_domain }}:{{ proxy_dblab_engine_public_port }}/instance"
 
   environment: "{{ proxy_env | default({}) }}"

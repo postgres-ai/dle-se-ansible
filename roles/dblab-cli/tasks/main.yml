@@ -2,27 +2,28 @@
 
 - block:
     - name: Install DBLab CLI ('dblab')
-      shell: |
+      ansible.builtin.shell: |
+        set -o pipefail;
         export DBLAB_CLI_VERSION={{ cli_version }}
         curl -sSL dblab.sh | bash
       args:
         executable: /bin/bash
 
     - name: Create DBLab CLI configuration directory
-      file:
+      ansible.builtin.file:
         dest: "{{ dblab_engine_base_path }}/cli"
         state: directory
         owner: "{{ username }}"
         group: "{{ username }}"
-        mode: 0644
+        mode: "0644"
 
     - name: Generate DBLab CLI configuration file '{{ dblab_engine_base_path }}/cli/cli.yml'
-      template:
+      ansible.builtin.template:
         src: templates/cli.yml.j2
         dest: "{{ dblab_engine_base_path }}/cli/cli.yml"
         owner: "{{ username }}"
         group: "{{ username }}"
-        mode: 0600
+        mode: "0600"
   when:
     - cli_install is defined
     - cli_install | bool

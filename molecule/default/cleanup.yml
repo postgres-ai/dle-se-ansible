@@ -1,0 +1,14 @@
+---
+- name: Molecule.default.cleanup
+  hosts: localhost
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Delete test ZFS datasets
+      ansible.builtin.command: zfs destroy "dblab_pool/{{ item }}"
+      register: zfs_destroy
+      loop:
+        - molecule_test_dataset_1
+        - molecule_test_dataset_2
+      failed_when: false
+...

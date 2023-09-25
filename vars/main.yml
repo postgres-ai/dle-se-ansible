@@ -10,6 +10,7 @@ zpool_disk: ""  # specify an empty disk for the ZFS pool (e.g.: /dev/sdb). If no
 zpool_name: "dblab_pool"
 zpool_mount_dir: "/var/lib/dblab"
 zpool_datasets_number: 2  # number of datasets for the ZFS pool. When the DBLab Engine is deployed, you can increase the number of datasets (if necessary).
+zpool_datasets_name: "dataset"  # base name for ZFS datasets. Suffixes (01, 02, etc.) are appended based on `zpool_datasets_number`.
 
 # DBLab Engine
 dblab_engine_verification_token: "some-secret-token"
@@ -17,7 +18,7 @@ dblab_engine_base_path: "/root/.dblab"
 dblab_engine_config_path: "{{ dblab_engine_base_path }}/engine/configs"
 dblab_engine_meta_path: "{{ dblab_engine_base_path }}/engine/meta"
 dblab_engine_logs_path: "{{ dblab_engine_base_path }}/engine/logs"
-dblab_engine_dump_location: "{{ zpool_mount_dir }}/{{ zpool_name }}/dataset_1/dump"  # Use a dataset directory for dumping data
+dblab_engine_dump_location: "{{ zpool_mount_dir }}/{{ zpool_name }}/{{ zpool_datasets_name }}_1/dump"  # Use a dataset directory for dumping data
 dblab_engine_container_host: 127.0.0.1
 dblab_engine_container_name: dblab_server
 dblab_engine_port: 2345
@@ -65,5 +66,5 @@ certbot_domain: "" # Domain to issue certificate, for example, example.com
 certbot_certs:
   - email: "{{ certbot_admin_email }}"
     domains:
-     - "{{ certbot_domain }}"
+      - "{{ certbot_domain }}"
 ...

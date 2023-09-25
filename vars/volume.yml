@@ -1,2 +1,3 @@
+---
 # ZFS pool
 zpool_disk: "/dev/sda"  # double-check it! (e.g.: DigitalOcean: "/dev/sda"; AWS EC2: "/dev/nvme1n1" or "/dev/xvdb")

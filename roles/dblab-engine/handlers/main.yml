@@ -1,7 +1,7 @@
 ---
 
 - name: Perform handler tasks
-  include_tasks: tasks/restart_engine.yml
+  ansible.builtin.include_tasks: tasks/restart_engine.yml
   listen: "restart dblab_server"
 
 ...

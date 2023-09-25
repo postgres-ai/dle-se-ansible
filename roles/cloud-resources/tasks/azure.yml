@@ -15,13 +15,13 @@
       when: ansible_distribution != "MacOSX"
 
     - name: Ensure that Azure collection is installed
-      command: ansible-galaxy collection list azure.azcollection
+      ansible.builtin.command: ansible-galaxy collection list azure.azcollection
       changed_when: false
       failed_when: false
       register: azcollection_result
 
     - name: Azure collection not installed
-      fail:
+      ansible.builtin.fail:
         msg:
           - "Please install Azure collection"
           - "ansible-galaxy collection install azure.azcollection"
@@ -29,11 +29,12 @@
         - azcollection_result.stderr is search("unable to find")
 
     - name: Get 'ansible_collections' path
-      command: ansible-galaxy collection list | grep ansible_collections
+      ansible.builtin.command: ansible-galaxy collection list | grep ansible_collections
       register: collections_path
+      changed_when: false
 
     - name: Install Azure collection requirements
-      pip:
+      ansible.builtin.pip:
         requirements: "{{ collections_path.stdout.split()[-1] }}/azure/azcollection/requirements-azure.txt"
         executable: pip3
         extra_args: "--trusted-host=pypi.python.org --trusted-host=pypi.org --trusted-host=files.pythonhosted.org"
@@ -115,17 +116,17 @@
       - lun: 0
         disk_size_gb: "{{ volume_size | int }}"
         managed_disk_type: "{{ volume_type | default('{{ StandardSSD_LRS }}') }}"
-    register: virtualmachine_result
+  register: virtualmachine_result
 
 # Info
 - name: Show virtual machine info
-  debug:
+  ansible.builtin.debug:
     var: virtualmachine_result
   when: virtualmachine_result is defined
 
 # set_fact: dblab_host
-- name: "set_fact: dblab_host (for deploy DBLab)"
-  set_fact:
+- name: "Set variable: dblab_host (for deploy DBLab)"
+  ansible.builtin.set_fact:
     dblab_host: "root@{{ public_ip_result.state.ip_address }}"
   when: public_ip_result.state.ip_address is defined
 
@@ -167,6 +168,7 @@
     - name: "Azure: Delete DBLab subnet"
       azure.azcollection.azure_rm_subnet:
         resource_group: "{{ azure_resourcegroup | default('DBLabEngineResourceGroup') }}"
+        virtual_network_name: "{{ azure_virtualnetwork | default('DBLabEngineNetwork') }}"
         name: "{{ azure_subnet | default('DBLabEngineNetworkSubnet') }}"
         state: absent
 
