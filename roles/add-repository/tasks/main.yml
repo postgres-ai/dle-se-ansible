@@ -7,6 +7,10 @@
         state: present
         keyring: /etc/apt/trusted.gpg.d/{{ item.key | urlsplit('netloc') }}.gpg
       loop: "{{ apt_repository_keys }}"
+      register: apt_key_status
+      until: apt_key_status is success
+      delay: 10
+      retries: 3
       when: apt_repository_keys | length > 0
 
     - name: Add repository apt-key from keyserver
@@ -15,6 +19,10 @@
         id: "{{ item.id }}"
         keyring: /etc/apt/trusted.gpg.d/{{ item.id }}.gpg
       loop: "{{ apt_repository_keyservers }}"
+      register: apt_keyserver_status
+      until: apt_keyserver_status is success
+      delay: 10
+      retries: 3
       when: apt_repository_keyservers | length > 0
 
     - name: Add repository
@@ -23,6 +31,10 @@
         state: present
         update_cache: true
       loop: "{{ apt_repository }}"
+      register: apt_repository_status
+      until: apt_repository_status is success
+      delay: 10
+      retries: 3
       when: apt_repository | length > 0
   environment: "{{ proxy_env | default({}) }}"
   when: ansible_os_family == "Debian"
