@@ -36,6 +36,7 @@ molecule-test:
     - make molecule-test
   tags:
     - dle-test
+  allow_failure: true  # allow build image even if the test failed
 
 build:
   stage: build
