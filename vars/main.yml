@@ -46,7 +46,7 @@ cli_environment_id: "{{ platform_project_name }}"
 
 # Netdata - https://github.com/netdata/netdata
 netdata_install: true
-netdata_version: 1.42.4-1
+netdata_version: 1.42.4-2
 netdata_image: "postgresai/netdata-for-dle:v{{ netdata_version | replace('v', '') }}"
 netdata_port: 19999
 

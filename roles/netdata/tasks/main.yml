@@ -2,8 +2,8 @@
 - block:
     - name: Copy Netdata plugin for DBLab Engine
       ansible.builtin.template:
-        src: templates/netdata_DLE.conf.j2
-        dest: "{{ dblab_engine_config_path }}/netdata_DLE.conf"
+        src: templates/DBLab_Engine.conf.j2
+        dest: "{{ dblab_engine_config_path }}/DBLab_Engine.conf"
         owner: "{{ username }}"
         group: "{{ username }}"
         mode: "0644"
@@ -20,7 +20,7 @@
         container_default_behavior: "compatibility"
         volumes:
           - netdataconfig:/etc/netdata
-          - "{{ dblab_engine_config_path }}/netdata_DLE.conf:/etc/netdata/charts.d/DLE.conf"
+          - "{{ dblab_engine_config_path }}/DBLab_Engine.conf:/etc/netdata/charts.d/DBLab_Engine.conf"
           - netdatalib:/var/lib/netdata
           - netdatacache:/var/cache/netdata
           - /proc:/host/proc:ro
