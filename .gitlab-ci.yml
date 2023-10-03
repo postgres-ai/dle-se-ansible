@@ -11,6 +11,7 @@ variables:
 
 before_script:
   - export TAG="${CI_COMMIT_TAG:-${CI_COMMIT_REF_SLUG}}"
+  - export CLEARED_TAG=${TAG//[^a-zA-Z0-9]/}  # remove dots in tags and all characters except letters and numbers
   - export TERM=xterm
 
 yamllint:
@@ -57,7 +58,7 @@ deploy-test-hetzner:
       postgresai/dle-se-ansible:$TAG \
         ansible-playbook deploy_dle.yml --extra-vars \
           "provision='hetzner' \
-          server_name='dblab-ci-test-hetzner-$TAG' \
+          server_name='dblab-ci-test-hetzner-$CLEARED_TAG' \
           server_type='CCX13' \
           server_image='ubuntu-22.04' \
           server_location='ash' \
@@ -67,7 +68,7 @@ deploy-test-hetzner:
           zpool_datasets_number='2' \
           platform_org_key=${PLATFORM_ORG_KEY} \
           platform_url='https://v2.postgres.ai/api/general' \
-          platform_project_name='dblab-ci-test-hetzner-$TAG'"
+          platform_project_name='dblab-ci-test-hetzner-$CLEARED_TAG'"
   when: manual
   tags:
     - dle-test
@@ -80,12 +81,12 @@ destroy-test-hetzner:
       postgresai/dle-se-ansible:$TAG \
         ansible-playbook cloud_resources.yml --extra-vars \
           "provision='hetzner' \
-          server_name='dblab-ci-test-hetzner-$TAG' \
+          server_name='dblab-ci-test-hetzner-$CLEARED_TAG' \
           server_type='CCX13' \
           server_location='ash' \
           state='absent' \
           platform_org_key=${PLATFORM_ORG_KEY} \
-          platform_project_name='dblab-ci-test-hetzner-$TAG'"
+          platform_project_name='dblab-ci-test-hetzner-$CLEARED_TAG'"
   when: manual
   tags:
     - dle-test
@@ -98,7 +99,7 @@ deploy-test-digitalocean:
       postgresai/dle-se-ansible:$TAG \
         ansible-playbook deploy_dle.yml --extra-vars \
           "provision='digitalocean' \
-          server_name='dblab-ci-test-digitalocean-$TAG' \
+          server_name='dblab-ci-test-digitalocean-$CLEARED_TAG' \
           server_type='g-2vcpu-8gb' \
           server_image='ubuntu-22-04-x64' \
           server_location='nyc1' \
@@ -108,7 +109,7 @@ deploy-test-digitalocean:
           zpool_datasets_number='2' \
           platform_org_key=${PLATFORM_ORG_KEY} \
           platform_url='https://v2.postgres.ai/api/general' \
-          platform_project_name='dblab-ci-test-digitalocean-$TAG'"
+          platform_project_name='dblab-ci-test-digitalocean-$CLEARED_TAG'"
   when: manual
   tags:
     - dle-test
@@ -121,12 +122,12 @@ destroy-test-digitalocean:
       postgresai/dle-se-ansible:$TAG \
         ansible-playbook cloud_resources.yml --extra-vars \
           "provision='digitalocean' \
-          server_name='dblab-ci-test-digitalocean-$TAG' \
+          server_name='dblab-ci-test-digitalocean-$CLEARED_TAG' \
           server_type='g-2vcpu-8gb' \
           server_location='nyc1' \
           state='absent' \
           platform_org_key=${PLATFORM_ORG_KEY} \
-          platform_project_name='dblab-ci-test-digitalocean-$TAG'"
+          platform_project_name='dblab-ci-test-digitalocean-$CLEARED_TAG'"
   when: manual
   tags:
     - dle-test
@@ -140,7 +141,7 @@ deploy-test-aws:
       postgresai/dle-se-ansible:$TAG \
         ansible-playbook deploy_dle.yml --extra-vars \
           "provision='aws' \
-          server_name='dblab-ci-test-aws-$TAG' \
+          server_name='dblab-ci-test-aws-$CLEARED_TAG' \
           server_type='t2.medium' \
           server_image='ami-07d445a5585fce0a1' \
           server_location='us-east-2' \
@@ -150,7 +151,7 @@ deploy-test-aws:
           zpool_datasets_number='2' \
           platform_org_key=${PLATFORM_ORG_KEY} \
           platform_url='https://v2.postgres.ai/api/general' \
-          platform_project_name='dblab-ci-test-aws-$TAG'"
+          platform_project_name='dblab-ci-test-aws-$CLEARED_TAG'"
   when: manual
   tags:
     - dle-test
@@ -164,12 +165,12 @@ destroy-test-aws:
       postgresai/dle-se-ansible:$TAG \
         ansible-playbook cloud_resources.yml --extra-vars \
           "provision='aws' \
-          server_name='dblab-ci-test-aws-$TAG' \
+          server_name='dblab-ci-test-aws-$CLEARED_TAG' \
           server_type='t2.medium' \
           server_location='us-east-2' \
           state='absent' \
           platform_org_key=${PLATFORM_ORG_KEY} \
-          platform_project_name='dblab-ci-test-aws-$TAG'"
+          platform_project_name='dblab-ci-test-aws-$CLEARED_TAG'"
   when: manual
   tags:
     - dle-test
@@ -183,7 +184,7 @@ destroy-test-aws:
 #      postgresai/dle-se-ansible:$TAG \
 #        ansible-playbook deploy_dle.yml --extra-vars \
 #          "provision='gcp' \
-#          server_name='dblab-ci-test-gcp-$TAG' \
+#          server_name='dblab-ci-test-gcp-$CLEARED_TAG' \
 #          server_type='n2-standard-2' \
 #          server_image='projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts' \
 #          server_location='us-central1' \
@@ -193,7 +194,7 @@ destroy-test-aws:
 #          zpool_datasets_number='2' \
 #          platform_org_key=${PLATFORM_ORG_KEY} \
 #          platform_url='https://v2.postgres.ai/api/general' \
-#          platform_project_name='dblab-ci-test-gcp-$TAG'"
+#          platform_project_name='dblab-ci-test-gcp-$CLEARED_TAG'"
 #  when: manual
 #  tags:
 #    - dle-test
@@ -206,12 +207,12 @@ destroy-test-aws:
 #      postgresai/dle-se-ansible:$TAG \
 #        ansible-playbook cloud_resources.yml --extra-vars \
 #          "provision='gcp' \
-#          server_name='dblab-ci-test-gcp-$TAG' \
+#          server_name='dblab-ci-test-gcp-$CLEARED_TAG' \
 #          server_type='n2-standard-2' \
 #          server_location='us-central1' \
 #          state='absent' \
 #          platform_org_key=${PLATFORM_ORG_KEY} \
-#          platform_project_name='dblab-ci-test-gcp-$TAG'"
+#          platform_project_name='dblab-ci-test-gcp-$CLEARED_TAG'"
 #  when: manual
 #  tags:
 #    - dle-test
