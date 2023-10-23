@@ -18,7 +18,7 @@
 
     # if dblab_engine_config_file is defined, copy the server.yml file
     - name: Copy DBLab Engine configuration file to '{{ dblab_engine_config_path }}/server.yml'
-      ansible.builtin.copy:
+      ansible.builtin.template:
         src: "{{ dblab_engine_config_file }}"
         dest: "{{ dblab_engine_config_path }}/server.yml"
         owner: "{{ username }}"
@@ -54,7 +54,7 @@
         access_time: preserve
       when: dblab_engine_config_file is not defined or
             dblab_engine_config_file | length < 1
-  tags: dle
+  tags: dle, dblab_engine
 
 - block:
     - name: Ensure that DBLab server container is running
@@ -103,6 +103,6 @@
         timeout: 30
         delay: 10
       ignore_errors: false
-  tags: dle
+  tags: dle, dblab_engine
 
 ...
