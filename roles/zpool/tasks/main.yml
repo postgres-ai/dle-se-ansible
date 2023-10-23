@@ -7,6 +7,9 @@
   when:
     - zpool_name is defined
     - zpool_name | length > 0
+  tags:
+    - zpool
+    - datasets
 
 # Create zpool
 - block:  # if the zpool_disk variable is not defined, try to detect an empty disk

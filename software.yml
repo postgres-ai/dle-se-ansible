@@ -1,7 +1,4 @@
 ---
-# TODO
-# - Add firewall role
-# - Envoy in docker
 
 - name: Add host to dblab_group
   hosts: localhost
@@ -41,30 +38,36 @@
   pre_tasks:
     - name: Include main variables
       ansible.builtin.include_vars: vars/main.yml
+      tags: always
 
     - name: Include OS-specific variables
       ansible.builtin.include_vars: "vars/{{ ansible_os_family }}.yml"
+      tags: always
 
     - name: Checking ansible version
       ansible.builtin.fail:
         msg: "Ansible version must be {{ minimal_ansible_version }} or higher"
       delegate_to: localhost
       when: ansible_version.full is version(minimal_ansible_version, '<')
+      tags: always
 
     - name: Checking DBLab Engine version
       ansible.builtin.fail:
         msg: "DBLab Engine version must be {{ minimal_dblab_engine_version }} or higher"
       when: dblab_engine_version | regex_replace('^v', '') | regex_replace('-rc.+$', '') is version(minimal_dblab_engine_version, '<')
+      tags: always
 
     - name: Checking Linux distribution
       ansible.builtin.fail:
         msg: "{{ ansible_distribution }} is not supported"
       when: ansible_distribution not in os_valid_distributions
+      tags: always
 
     - name: Checking version of OS Linux
       ansible.builtin.fail:
         msg: "{{ ansible_distribution_version }} of {{ ansible_distribution }} is not supported"
       when: ansible_distribution_version is version_compare(os_minimum_versions[ansible_distribution], '<')
+      tags: always
 
     - name: Confirm that necessary variables are set
       ansible.builtin.debug:
@@ -74,6 +77,7 @@
           - "For questions, contact Postgres.ai: https://postgres.ai/contact."
       failed_when: platform_project_name | length < 1 or platform_org_key | length < 1
       when: platform_project_name | length < 1 or platform_org_key | length < 1
+      tags: always
 
     - name: Update apt cache
       ansible.builtin.apt:
@@ -106,7 +110,6 @@
         owner: "{{ username }}"
         group: "{{ username }}"
         mode: "0600"
-  tags: always
 
   roles:
     # Prepare system
