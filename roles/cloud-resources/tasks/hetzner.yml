@@ -44,6 +44,10 @@
         name: "{{ ssh_key_name }}"
         public_key: "{{ ssh_key_content }}"
         state: present
+        labels:
+          dblab: ""
+          env: dblab
+          server: "{{ server_name | lower }}"
       when:
         - ssh_key_name | length > 0
         - ssh_key_content | length > 0
@@ -109,6 +113,10 @@
         location: "{{ server_location }}"
         enable_ipv4: true
         enable_ipv6: false
+        labels:
+          dblab: ""
+          env: dblab
+          server: "{{ server_name | lower }}"
       register: server_result
 
     - name: "Hetzner Cloud: Add server to network '{{ server_network }}'"
@@ -126,6 +134,10 @@
         state: present
         size: "{{ volume_size | int }}"
         server: "{{ server_name | lower }}"
+        labels:
+          dblab: ""
+          env: dblab
+          server: "{{ server_name | lower }}"
   when: state == 'present'
 
 # Info
