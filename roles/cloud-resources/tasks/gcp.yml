@@ -46,6 +46,19 @@
       ansible.builtin.set_fact:
         gcp_network_name: "{{ server_network if server_network is defined and server_network | length > 0 else 'default' }}"
 
+    - name: "GCP: Create or modify disk '{{ server_name }}-storage'"
+      google.cloud.gcp_compute_disk:
+        auth_kind: serviceaccount
+        service_account_contents: "{{ lookup('ansible.builtin.env', 'GCP_SERVICE_ACCOUNT_CONTENTS') }}"
+        project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
+        zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"  # add "-b" if the zone is not defined
+        name: "{{ server_name }}-storage"
+        size_gb: "{{ volume_size | int }}"
+        state: present
+        labels:
+          env: dblab
+          server: "{{ server_name | lower }}"
+
     - name: "GCP: Create or modify instance '{{ server_name }}'"
       google.cloud.gcp_compute_instance:
         auth_kind: serviceaccount
@@ -75,6 +88,13 @@
             access_configs:
               - name: External NAT
                 type: ONE_TO_ONE_NAT
+        labels:
+          env: dblab
+          server: "{{ server_name | lower }}"
+        tags:
+          items:
+            - "dblab"
+            - "{{ server_name | lower }}"
         metadata:
           ssh-keys: "root:{{ ssh_key_content }}"
         status: "{{ instance.status | default(omit) }}"
@@ -119,6 +139,15 @@
         project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
         zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"  # add "-b" if the zone is not defined
         name: "{{ server_name | lower }}"
+        state: absent
+
+    - name: "GCP: Delete disk '{{ server_name }}-storage'"
+      google.cloud.gcp_compute_disk:
+        auth_kind: serviceaccount
+        service_account_contents: "{{ lookup('ansible.builtin.env', 'GCP_SERVICE_ACCOUNT_CONTENTS') }}"
+        project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
+        zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"  # add "-b" if the zone is not defined
+        name: "{{ server_name }}-storage"
         state: absent
   when: state == 'absent'
 

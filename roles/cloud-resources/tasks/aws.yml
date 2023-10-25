@@ -48,6 +48,9 @@
         key_material: "{{ ssh_key_content }}"
         region: "{{ server_location }}"
         state: present
+        resource_tags:
+          env: dblab
+          server: "{{ server_name | lower }}"
       register: ssh_key_result
       when:
         - ssh_key_name | length > 0
@@ -121,6 +124,8 @@
               - "{{ dblab_engine_ui_port }}"
               - "{{ netdata_port }}"
             cidr_ip: 0.0.0.0/0
+        resource_tags:
+          env: dblab
 
     # Instance and volume
     - name: "AWS: Create or modify EC2 instance '{{ server_name }}'"
@@ -149,6 +154,9 @@
               volume_type: "{{ volume_type | default('gp3') }}"
               volume_size: "{{ volume_size | int }}"
               delete_on_termination: true
+        resource_tags:
+          env: dblab
+          server: "{{ server_name | lower }}"
       register: ec2_result
       until:
         - ec2_result.instances[0].public_ip_address is defined
