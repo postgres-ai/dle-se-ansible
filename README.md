@@ -179,7 +179,7 @@ docker run --rm -it \
   -v $HOME/.ssh:/root/.ssh:ro \
   -e ANSIBLE_SSH_ARGS="-F none" \
   postgresai/dle-se-ansible:v1.0 \
-    ansible-playbook deploy_dle.yml --tags proxy --extra-vars \
+    ansible-playbook software.yml --tags proxy --extra-vars \
       "dblab_host='root@12.34.56.78' \
       proxy_install='true' \
       certbot_domain='example.domain.com' \
@@ -200,7 +200,7 @@ docker run --rm -it \
   -v /path/to/config:/root/config:ro \
   -e ANSIBLE_SSH_ARGS="-F none" \
   postgresai/dle-se-ansible:v1.0 \
-    ansible-playbook deploy_dle.yml --extra-vars \
+    ansible-playbook software.yml --extra-vars \
       "dblab_host='root@12.34.56.78' \
       zpool_datasets_number='3' \
       dblab_engine_version='3.4.0' \
@@ -211,6 +211,9 @@ docker run --rm -it \
 
 Note: Replace '`/path/to/config'` with the actual directory path where your configuration file is located. This path will be mounted into the Docker container, allowing the automation to access your configuration file.
 
+#### Using Git for DBLab Engine configuration management
+
+Example of a repository that demonstrates a how to manage the configuration of the DBLab Engine using Git - https://gitlab.com/vitabaks/dblab-gitops-example
 
 ## Support
 
