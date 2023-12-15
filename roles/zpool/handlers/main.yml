@@ -1,0 +1,9 @@
+---
+
+# Issue a SIGHUP signal to the main process in the DBLab Engine container.
+# Note that kill here is not killing the process, it just sends the SIGHUP signal to it.
+- name: Reload DBLab Engine to apply configuration changes
+  ansible.builtin.command: "sudo docker exec {{ dblab_engine_container_name }} kill -SIGHUP 1"
+  listen: "reload dblab_server"
+
+...

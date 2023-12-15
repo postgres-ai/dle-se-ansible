@@ -91,18 +91,19 @@
     - name: "Check number of datasets for '{{ zpool_name }}'"
       ansible.builtin.shell: |
         set -o pipefail;
-        zfs list -t filesystem | grep {{ zpool_name }} | grep -c dataset
+        zfs list -t filesystem | grep {{ zpool_name }} | grep {{ zpool_datasets_name }} | grep -v dblab_clone | wc -l
       args:
         executable: /bin/bash
       register: datasets_number_result
       changed_when: false
       failed_when: false
 
-    - name: Create datasets  # TODO: add handler (docker exec dblab_server kill -SIGHUP 1) to reload DBLab Engine config if a new dataset has been created
+    - name: Create datasets
       ansible.builtin.command: zfs create "{{ zpool_name }}/{{ item }}"
       with_sequence: start={{ datasets_number_result.stdout | int + 1 }} count={{ zpool_datasets_number | int - datasets_number_result.stdout | int }} format={{ zpool_datasets_name }}_%d  # yamllint disable rule:line-length
       when: (zpool_status.rc != 0 and zpool_datasets_number|int > 0) or
             (zpool_status.rc == 0 and zpool_datasets_number|int > datasets_number_result.stdout|int)
+      notify: "reload dblab_server"
   when:
     - zpool_name is defined
     - zpool_datasets_number is defined
