@@ -21,9 +21,13 @@ system_packages:
   - curl
   - gnupg2
   - zfsutils-linux
-  - docker-ce
-  - docker-ce-cli
-  - containerd.io
   - postgresql-client
   - s3fs
   - jq
+
+docker_version: "24.0.7"
+docker_version_full: "5:{{ docker_version }}-1~{{ ansible_distribution | lower }}.{{ ansible_distribution_version }}~{{ ansible_distribution_release }}"
+docker_packages:
+  - "docker-ce={{ docker_version_full }}"
+  - "docker-ce-cli={{ docker_version_full }}"
+  - containerd.io

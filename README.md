@@ -49,6 +49,7 @@ Note: if 'ssh_key_name' is not specified, with each new execution of the playboo
 | `zpool_disk` (optional) | Disk for the ZFS pool (e.g.: /dev/sdb). If the specified disk is not empty, the playbook stops with an error (data deletion protection). If not specified, an attempt will be made to automatically detect an empty volume. | "" |
 | `zpool_name` (optional) | The name of the ZFS pool. | `dblab_pool` |
 | `zpool_mount_dir` (optional) | The path to mount the ZFS pool. | `/var/lib/dblab` |
+| `zpool_options` (optional) | Options used when creating a ZFS pool. | `-O compression=on -O atime=off -O recordsize=128k -O logbias=throughput` |
 | `zpool_datasets_number`(optional)  | The number of datasets that will be created for the ZFS pool. | `2` |
 | `zpool_datasets_name`(optional)  | Base name for ZFS datasets. Suffixes (01, 02, etc.) are appended based on `zpool_datasets_number`. | `dataset` |
 
@@ -66,6 +67,8 @@ Note: if 'ssh_key_name' is not specified, with each new execution of the playboo
 | `dblab_engine_dump_location`(optional) | The dump file will be automatically created on this location and then used to restore. (if 'logicalDump' job is specified in server.yml). | `{{ zpool_mount_dir }}/{{ zpool_name }}/dataset_1/dump` |
 | `dblab_engine_container_name` (optional) | The DBLab Engine container name. | `dblab_server` |
 | `dblab_engine_container_host` (optional) | The IP address at which the 'dblab_server' container accepts connections. | `127.0.0.1` |
+| `dblab_engine_container_default_volumes` (optional) | Directories to be mounted in the 'dblab_server' container. | (see `vars/main.yml`) |
+| `dblab_engine_container_additional_volumes` (optional) | Additional directories or files to be mounted in the 'dblab_server' container. | `[]` |
 | `dblab_engine_port` (optional) | The port at which the 'dblab_server' container accepts connections. | `2345` |
 | `dblab_engine_image` (optional) | The 'dblab_server' container image. | `postgresai/dblab-server:{{ dblab_engine_version }}` |
 | `dblab_engine_ui_image` (optional) | The dblab UI container image.  | `postgresai/ce-ui:{{ dblab_engine_ui_version }}` |
@@ -73,6 +76,8 @@ Note: if 'ssh_key_name' is not specified, with each new execution of the playboo
 | `dblab_engine_clone_access_addresses` (optional) | IP addresses, from which clone containers accepts connections. | `127.0.0.1` |
 | `dblab_engine_clone_port_pool.from` `dblab_engine_clone_port_pool.to` (optional) | Pool of ports for Postgres clones. Ports will be allocated sequentially, starting from the lowest value. The "from" value must be less than "to". | `6000`, `6099` |
 | `dblab_engine_config_file` (optional) | Copy the specified dblab configuration file instead of generating a new configuration file. | "" |
+| `dblab_engine_preprocess_script` (optional) | Copy the preprocessing script file to '`{{ dblab_engine_base_path }}/preprocess.sh`' | "" |
+
 
 #### Platform:
 | Variable | Description | Default value |
@@ -87,6 +92,33 @@ Note: if 'ssh_key_name' is not specified, with each new execution of the playboo
 | `cli_install` (optional) | Install the DBLab CLI on the dblab server. | `true` |
 | `cli_version` (optional) | The version of the DBLab CLI to be installed. | `{{ dblab_engine_version }}` |
 | `cli_environment_id` (optional) | an ID of the DBLab CLI environment to create. | `{{ platform_project_name }}` |
+
+#### Joe Bot:
+
+| Variable | Description | Default value |
+|:---------|:------------|:-------------:|
+| `joe_bot_install` (optional) | Install Joe Bot. | `false` |
+| `joe_version` (optional) | The Joe Bot version.| `0.11.0-rc.4` |
+| `joe_config_path`(optional) | The Joe Bot 'configs' directory. | `{{ dblab_engine_base_path }}/joe/configs` |
+| `joe_meta_path`(optional) | The Joe Bot 'meta' directory. | `{{ dblab_engine_base_path }}/joe/meta` |
+| `joe_image` (optional) | The Joe Bot container image. | `postgresai/joe:{{ joe_version }}` |
+| `joe_container_name` (optional) | The Joe Bot container name. | `joe_bot` |
+| `joe_container_host` (optional) | The IP address at which the 'joe_bot' container accepts connections. | `127.0.0.1` |
+| `joe_port` (optional) | The port at which the 'joe_bot' container accepts connections. | `2400` |
+| `joe_platform_token`(optional) | Postgres.ai Platform API secret token. | `platform_secret_token` |
+| `joe_communication_type`(optional) | Available communication types ("webui", "slack", "slackrtm", "slacksm") | `webui` |
+| `joe_communication_signing_secret` (optional) | Web UI Signing Secret.  | `secret_signing` |
+| `joe_communication_slack_signing_secret` (optional) | Slack App Signing Secret.  | `secret_signing` |
+| `joe_communication_slack_access_token` (optional) | Bot User OAuth Access Token.  | `xoxb-XXXX` |
+| `joe_communication_slack_app_level_token` (optional) | App Level Token (for "slacksm").  | `xapp-XXXX` |
+| `joe_communication_channels_channel_id` (optional) | Web UI channel ID.  | `{{ platform_project_name }}` |
+| `joe_communication_channels_project` (optional) | Postgres.ai Platform project.  | `{{ platform_project_name }}` |
+| `joe_dblab_params_dbname` (optional) | PostgreSQL connection parameters used to connect Joe to the clone (dbname).  | `postgres` |
+| `joe_dblab_params_sslmode` (optional) | PostgreSQL connection parameters used to connect Joe to the clone (sslmode).  | `prefer` |
+| `joe_config_file` (optional) | Copy the specified Joe Bot configuration file instead of generating a new configuration file. | "" |
+
+Note: Joe Bot repository: https://gitlab.com/postgres-ai/joe
+
 
 #### Monitoring:
 
@@ -113,6 +145,13 @@ Note: if 'ssh_key_name' is not specified, with each new execution of the playboo
 
 
 Note: More 'certbot' variables see [here](https://github.com/geerlingguy/ansible-role-certbot).
+
+#### Other:
+
+| Variable | Description | Default value |
+|:---------|:------------|:-------------:|
+| `print_usage_instructions` (optional) | Print the usage instructions after deployment.  | `true` |
+
 
 ## Usage
 

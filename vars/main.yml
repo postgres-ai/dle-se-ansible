@@ -9,6 +9,10 @@ username: "root"  # system user, owner of configuration files
 zpool_disk: ""  # specify an empty disk for the ZFS pool (e.g.: /dev/sdb). If not specified, an attempt will be made to automatically detect an empty volume.
 zpool_name: "dblab_pool"
 zpool_mount_dir: "/var/lib/dblab"
+zpool_options: "-O compression=on -O atime=off -O recordsize=128k -O logbias=throughput"
+# Note: For a physical mode with a sync instance (physicalRestore.sync.enabled: true in DBLab config), consider a smaller 'recordsize' value like '8k'.
+# While 'recordsize=128k' enhances compression and performance for large-scale IO operations like index creation,
+# it may reduce WAL replay efficiency, potentially leading to increased lag.
 zpool_datasets_number: 2  # number of datasets for the ZFS pool. When the DBLab Engine is deployed, you can increase the number of datasets (if necessary).
 zpool_datasets_name: "dataset"  # base name for ZFS datasets. Suffixes (01, 02, etc.) are appended based on `zpool_datasets_number`.
 
@@ -19,8 +23,6 @@ dblab_engine_config_path: "{{ dblab_engine_base_path }}/engine/configs"
 dblab_engine_meta_path: "{{ dblab_engine_base_path }}/engine/meta"
 dblab_engine_logs_path: "{{ dblab_engine_base_path }}/engine/logs"
 dblab_engine_dump_location: "{{ zpool_mount_dir }}/{{ zpool_name }}/{{ zpool_datasets_name }}_1/dump"  # Use a dataset directory for dumping data
-dblab_engine_container_host: 127.0.0.1
-dblab_engine_container_name: dblab_server
 dblab_engine_port: 2345
 dblab_engine_version: 3.4.0
 dblab_engine_image: "postgresai/dblab-server:{{ dblab_engine_version | replace('v', '') }}"
@@ -32,6 +34,17 @@ dblab_engine_clone_port_pool:
   to: 6100
 dblab_engine_clone_access_addresses: "127.0.0.1"  # IP addresses that can be used to access clones.
 dblab_engine_computing_infrastructure: "{{ provision }}"
+dblab_engine_container_host: 127.0.0.1
+dblab_engine_container_name: dblab_server
+dblab_engine_container_default_volumes:
+  - /var/run/docker.sock:/var/run/docker.sock
+  - /var/lib/dblab:/var/lib/dblab/:rshared
+  - "{{ dblab_engine_config_path }}:/home/dblab/configs"
+  - "{{ dblab_engine_meta_path }}:/home/dblab/meta"
+  - "{{ dblab_engine_logs_path }}:/home/dblab/logs"
+dblab_engine_container_additional_volumes: []
+#  - "{{ dblab_engine_base_path }}/preprocess.sh:/tmp/preprocess.sh"
+#  - "/etc/wal-g.d/gcs.json:/tmp/sa.json:rshared"
 
 # Platform
 platform_project_name: ""  # Project name
@@ -41,6 +54,27 @@ platform_org_key: ""  # Organization key
 cli_install: true
 cli_version: "{{ dblab_engine_version | replace('v', '') }}"
 cli_environment_id: "{{ platform_project_name }}"
+
+# Joe Bot
+joe_bot_install: false # do not install Joe Bot by default
+joe_version: 0.11.0-rc.4
+joe_config_path: "{{ dblab_engine_base_path }}/joe/configs"
+joe_meta_path: "{{ dblab_engine_base_path }}/joe/meta"
+joe_image: "postgresai/joe:{{ joe_version | replace('v', '') }}"
+joe_container_name: joe_bot
+joe_container_host: 127.0.0.1
+joe_port: 2400
+joe_platform_token: "platform_secret_token" # Postgres.ai Platform API secret token.
+joe_communication_type: "webui" # Available communication types ('webui', 'slack', 'slackrtm', 'slacksm')
+joe_communication_signing_secret: "secret_signing" # Web UI Signing Secret.
+joe_communication_slack_signing_secret: "secret_signing" # Slack App Signing Secret.
+joe_communication_slack_access_token: "xoxb-XXXX" # Bot User OAuth Access Token.
+joe_communication_slack_app_level_token: "xapp-XXXX" # App Level Token (for "slacksm").
+joe_communication_channels_channel_id: "{{ platform_project_name }}" # Web UI channel ID.
+joe_communication_channels_project: "{{ platform_project_name }}" # Postgres.ai Platform project to which user sessions are to be assigned.
+# PostgreSQL connection parameters used to connect Joe to the clone
+joe_dblab_params_dbname: "postgres"
+joe_dblab_params_sslmode: "prefer"
 
 # Monitoring
 
@@ -53,6 +87,7 @@ netdata_port: 19999
 # Proxy
 proxy_install: false # Set "true" to install Envoy proxy and issue Let's Encrypt certificate
 proxy_dblab_engine_public_port: 443
+proxy_joe_public_port: 444
 certbot_install_method: pip
 certbot_install_version: 2.6.0
 certbot_create_if_missing: true
@@ -67,4 +102,8 @@ certbot_certs:
   - email: "{{ certbot_admin_email }}"
     domains:
       - "{{ certbot_domain }}"
+
+# Usage instructions
+print_usage_instructions: true # Print the usage instructions after deployment
+
 ...

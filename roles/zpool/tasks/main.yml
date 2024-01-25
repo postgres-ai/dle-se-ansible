@@ -71,10 +71,7 @@
     - name: Create zpool (use '{{ zpool_disk }}')
       ansible.builtin.command: >-
         zpool create -f
-        -O compression=on
-        -O atime=off
-        -O recordsize=128k
-        -O logbias=throughput
+        {{ zpool_options }}
         -m {{ zpool_mount_dir }}/{{ zpool_name }}
         {{ zpool_name }} {{ zpool_disk }}
   when:

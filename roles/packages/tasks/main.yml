@@ -4,6 +4,7 @@
     - name: Update apt cache
       ansible.builtin.apt:
         update_cache: true
+        cache_valid_time: 3600
       register: apt_status
       until: apt_status is success
       delay: 10
@@ -14,6 +15,17 @@
         name: "{{ item }}"
         state: present
       loop: "{{ system_packages }}"
+      register: apt_status
+      until: apt_status is success
+      delay: 10
+      retries: 3
+
+    - name: Install Docker packages
+      ansible.builtin.apt:
+        name: "{{ item }}"
+        state: present
+        allow_downgrade: true
+      loop: "{{ docker_packages }}"
       register: apt_status
       until: apt_status is success
       delay: 10

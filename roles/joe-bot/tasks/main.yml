@@ -1,0 +1,67 @@
+---
+- block:
+    - name: Create configuration and meta directories
+      ansible.builtin.file:
+        dest: "{{ dir_item }}"
+        state: directory
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: "0644"
+      loop:
+        - "{{ joe_config_path }}"
+        - "{{ joe_meta_path }}"
+      loop_control:
+        loop_var: dir_item
+
+    # if joe_config_file is defined, copy the joe.yml file
+    - name: Copy Joe Bot configuration file to '{{ joe_config_path }}/joe.yml'
+      ansible.builtin.template:
+        src: "{{ joe_config_file }}"
+        dest: "{{ joe_config_path }}/joe.yml"
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: "0644"
+      notify: "restart joe"
+      when:
+        - joe_config_file is defined
+        - joe_config_file | length > 0
+
+    # if joe_config_file is not defined, generate a new joe.yml from the jinja template
+    - name: Generate Joe Bot configuration file '{{ joe_config_path }}/joe.yml'
+      ansible.builtin.template:
+        src: templates/joe.yml.j2
+        dest: "{{ joe_config_path }}/joe.yml"
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: "0644"
+      notify: "restart joe"
+      when: joe_config_file is not defined or joe_config_file | length < 1
+  tags: joe, joe_conf
+
+- block:
+    - name: Ensure that Joe Bot container is running
+      community.docker.docker_container:
+        name: "{{ joe_container_name }}"
+        image: "{{ joe_image }}"
+        state: started
+        restart_policy: unless-stopped
+        container_default_behavior: "compatibility"
+        network_mode: host
+        volumes:
+          - "{{ joe_config_path }}:/home/configs"
+          - "{{ joe_meta_path }}:/home/meta"
+        ports:
+          - "{{ joe_container_host }}:{{ joe_port }}:2400"
+      register: joe_start
+
+    - name: Wait for Joe Bot API port to be available
+      ansible.builtin.wait_for: # noqa no-handler
+        port: "{{ joe_port }}"
+        host: "localhost"
+        state: started
+        timeout: 60
+        delay: 10
+      when: joe_start is changed
+  tags: joe, joe_container
+
+...

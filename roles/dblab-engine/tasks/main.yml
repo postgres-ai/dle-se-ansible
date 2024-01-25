@@ -14,7 +14,21 @@
         - "{{ dblab_engine_dump_location }}"
       loop_control:
         loop_var: dir_item
+      when: dir_item | default('', true) | length > 0
       tags: dblab_engine_conf
+
+    # if dblab_engine_preprocess_script is defined, copy the file
+    - name: Copy the preprocessing script file to '{{ dblab_engine_base_path }}/preprocess.sh'
+      ansible.builtin.template:
+        src: "{{ dblab_engine_preprocess_script }}"
+        dest: "{{ dblab_engine_base_path }}/preprocess.sh"
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: "0755"
+      when:
+        - dblab_engine_preprocess_script is defined
+        - dblab_engine_preprocess_script | length > 0
+      tags: dblab_engine_preprocess_script, preprocess_script
 
     # if dblab_engine_config_file is defined, copy the server.yml file
     - name: Copy DBLab Engine configuration file to '{{ dblab_engine_config_path }}/server.yml'
@@ -56,53 +70,7 @@
             dblab_engine_config_file | length < 1
   tags: dle, dblab_engine
 
-- block:
-    - name: Ensure that DBLab server container is running
-      community.docker.docker_container:
-        name: "{{ dblab_engine_container_name }}"
-        image: "{{ dblab_engine_image }}"
-        state: started
-        privileged: true
-        restart_policy: unless-stopped
-        container_default_behavior: "compatibility"
-        volumes:
-          - /var/run/docker.sock:/var/run/docker.sock
-          - /var/lib/dblab:/var/lib/dblab/:rshared
-          - "{{ dblab_engine_config_path }}:/home/dblab/configs"
-          - "{{ dblab_engine_meta_path }}:/home/dblab/meta"
-          - "{{ dblab_engine_logs_path }}:/home/dblab/logs"
-        ports:
-          - "{{ dblab_engine_container_host }}:{{ dblab_engine_port }}:2345"
-        env:
-          DOCKER_API_VERSION: "1.39"
-          DLE_COMPUTING_INFRASTRUCTURE: "{{ dblab_engine_computing_infrastructure }}"
-      register: dblab_server_start
-
-    - name: Wait for DBLab Engine API port to be available
-      ansible.builtin.wait_for: # noqa no-handler
-        port: "{{ dblab_engine_port }}"
-        host: "localhost"
-        state: started
-        timeout: 60
-        delay: 10
-      when: dblab_server_start is changed
-
-    - name: Ensure DBLab Engine API is healthy
-      ansible.builtin.uri:
-        url: "http://localhost:{{ dblab_engine_port }}/healthz"
-      register: _result
-      until: _result.status == 200
-      retries: 10
-      delay: 10
-
-    - name: Ensure DBLab Engine UI is available
-      ansible.builtin.wait_for:
-        port: "{{ dblab_engine_ui_port }}"
-        host: "localhost"
-        state: started
-        timeout: 30
-        delay: 10
-      ignore_errors: false
-  tags: dle, dblab_engine
+- name: Make sure handlers are flushed immediately
+  ansible.builtin.meta: flush_handlers
 
 ...

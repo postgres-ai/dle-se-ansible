@@ -10,17 +10,14 @@
         privileged: true
         restart_policy: unless-stopped
         container_default_behavior: "compatibility"
-        volumes:
-          - /var/run/docker.sock:/var/run/docker.sock
-          - /var/lib/dblab:/var/lib/dblab/:rshared
-          - "{{ dblab_engine_config_path }}:/home/dblab/configs"
-          - "{{ dblab_engine_meta_path }}:/home/dblab/meta"
-          - "{{ dblab_engine_logs_path }}:/home/dblab/logs"
+        volumes: "{{ docker_container_volumes }}"
         ports:
           - "{{ dblab_engine_container_host }}:{{ dblab_engine_port }}:2345"
         env:
           DOCKER_API_VERSION: "1.39"
           DLE_COMPUTING_INFRASTRUCTURE: "{{ dblab_engine_computing_infrastructure }}"
+      vars:
+        docker_container_volumes: "{{ dblab_engine_container_default_volumes + dblab_engine_container_additional_volumes }}"
 
     - name: Wait for DBLab Engine API port to be available
       ansible.builtin.wait_for:
