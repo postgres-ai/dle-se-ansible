@@ -34,7 +34,7 @@ static_resources:
             address:
               socket_address:
                 address: 0.0.0.0
-                port_value: 2346
+                port_value: {{ dblab_engine_ui_port }}
   - name: joe-api-http
     type: STRICT_DNS
     connect_timeout: 1s
@@ -46,7 +46,7 @@ static_resources:
             address:
               socket_address:
                 address: 0.0.0.0
-                port_value: 2400
+                port_value: {{ joe_port }}
   - name: ciobserver-api-http
     type: STRICT_DNS
     connect_timeout: 1s
@@ -58,7 +58,7 @@ static_resources:
             address:
               socket_address:
                 address: 0.0.0.0
-                port_value: 2500
+                port_value: {{ dblab_engine_port }}
   listeners:
 {% for i in range(dblab_engine_clone_port_pool.from, dblab_engine_clone_port_pool.to + 1) %}
   - name: dblab_clone_{{ i + 3000 }}_listener
@@ -129,7 +129,7 @@ static_resources:
   - address:
       socket_address:
         address: 0.0.0.0
-        port_value: 444
+        port_value: {{ proxy_joe_public_port }}
     filter_chains:
     - filters:
       - name: envoy.filters.network.http_connection_manager

@@ -58,10 +58,12 @@
       ansible.builtin.command: "cat {{ dblab_engine_base_path }}/usage_instructions.txt"
       register: instructions_output
       changed_when: false
+      when: print_usage_instructions | default(false) | bool
 
     - name: Print usage instructions
       ansible.builtin.debug:
         msg: "{{ instructions_output.stdout_lines }}"
+      when: instructions_output.stdout_lines is defined
   run_once: true
   tags: info, usage
 

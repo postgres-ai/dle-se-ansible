@@ -132,48 +132,50 @@ destroy-test-digitalocean:
   tags:
     - dle-test
 
-deploy-test-aws:
-  stage: test-deploy
-  script: |
-    docker run --rm \
-      --env AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} \
-      --env AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} \
-      postgresai/dle-se-ansible:$TAG \
-        ansible-playbook deploy_dle.yml --extra-vars \
-          "provision='aws' \
-          server_name='dblab-ci-test-aws-$CLEARED_TAG' \
-          server_type='t2.medium' \
-          server_image='ami-07d445a5585fce0a1' \
-          server_location='us-east-2' \
-          volume_size='30' \
-          dblab_engine_verification_token='ci-test-token' \
-          dblab_engine_version='3.4.0' \
-          zpool_datasets_number='2' \
-          platform_org_key=${PLATFORM_ORG_KEY} \
-          platform_url='https://v2.postgres.ai/api/general' \
-          platform_project_name='dblab-ci-test-aws-$CLEARED_TAG'"
-  when: manual
-  tags:
-    - dle-test
+# TODO: Enable tests on AWS when access issues are fixed
 
-destroy-test-aws:
-  stage: test-destroy
-  script: |
-    docker run --rm \
-      --env AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} \
-      --env AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} \
-      postgresai/dle-se-ansible:$TAG \
-        ansible-playbook cloud_resources.yml --extra-vars \
-          "provision='aws' \
-          server_name='dblab-ci-test-aws-$CLEARED_TAG' \
-          server_type='t2.medium' \
-          server_location='us-east-2' \
-          state='absent' \
-          platform_org_key=${PLATFORM_ORG_KEY} \
-          platform_project_name='dblab-ci-test-aws-$CLEARED_TAG'"
-  when: manual
-  tags:
-    - dle-test
+#deploy-test-aws:
+#  stage: test-deploy
+#  script: |
+#    docker run --rm \
+#      --env AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} \
+#      --env AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} \
+#      postgresai/dle-se-ansible:$TAG \
+#        ansible-playbook deploy_dle.yml --extra-vars \
+#          "provision='aws' \
+#          server_name='dblab-ci-test-aws-$CLEARED_TAG' \
+#          server_type='t2.medium' \
+#          server_image='ami-07d445a5585fce0a1' \
+#          server_location='us-east-2' \
+#          volume_size='30' \
+#          dblab_engine_verification_token='ci-test-token' \
+#          dblab_engine_version='3.4.0' \
+#          zpool_datasets_number='2' \
+#          platform_org_key=${PLATFORM_ORG_KEY} \
+#          platform_url='https://v2.postgres.ai/api/general' \
+#          platform_project_name='dblab-ci-test-aws-$CLEARED_TAG'"
+#  when: manual
+#  tags:
+#    - dle-test
+
+#destroy-test-aws:
+#  stage: test-destroy
+#  script: |
+#    docker run --rm \
+#      --env AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} \
+#      --env AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} \
+#      postgresai/dle-se-ansible:$TAG \
+#        ansible-playbook cloud_resources.yml --extra-vars \
+#          "provision='aws' \
+#          server_name='dblab-ci-test-aws-$CLEARED_TAG' \
+#          server_type='t2.medium' \
+#          server_location='us-east-2' \
+#          state='absent' \
+#          platform_org_key=${PLATFORM_ORG_KEY} \
+#          platform_project_name='dblab-ci-test-aws-$CLEARED_TAG'"
+#  when: manual
+#  tags:
+#    - dle-test
 
 # TODO
 #deploy-test-gcp:

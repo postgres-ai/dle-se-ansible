@@ -24,11 +24,36 @@
         ansible_become: false
       run_once: true
 
+# Check if GCP_SERVICE_ACCOUNT_CONTENTS is defined
+- name: Lookup the GCP_SERVICE_ACCOUNT_CONTENTS environmental variable
+  ansible.builtin.set_fact:
+    gcp_service_account_contents_raw: "{{ lookup('ansible.builtin.env', 'GCP_SERVICE_ACCOUNT_CONTENTS') | default('') }}"
+  no_log: true
+
+- name: "Fail if no GCP service account information is provided"
+  ansible.builtin.fail:
+    msg: "GCP_SERVICE_ACCOUNT_CONTENTS is not defined or empty. Please provide GCP service account credentials."
+  when: gcp_service_account_contents_raw | length < 1
+
+# Decode GCP Service Account if base64 encoded
+- name: "Set variable: gcp_service_account_contents (b64decode)"
+  ansible.builtin.set_fact:
+    gcp_service_account_contents: "{{ gcp_service_account_contents_raw | b64decode }}"
+  no_log: true
+  when: gcp_service_account_contents_raw is match('^[a-zA-Z0-9+/]+={0,2}$')
+
+# Set GCP Service Account Contents to raw value if not base64 encoded
+- name: "Set variable: gcp_service_account_contents"
+  ansible.builtin.set_fact:
+    gcp_service_account_contents: "{{ gcp_service_account_contents_raw }}"
+  no_log: true
+  when: gcp_service_account_contents is not defined
+
 # Project info
 - name: "GCP: Gather information about project"
   google.cloud.gcp_resourcemanager_project_info:
     auth_kind: serviceaccount
-    service_account_contents: "{{ lookup('ansible.builtin.env', 'GCP_SERVICE_ACCOUNT_CONTENTS') }}"
+    service_account_contents: "{{ gcp_service_account_contents }}"
   register: project_info
   when: gcp_project is not defined or gcp_project | length < 1
 
@@ -49,7 +74,7 @@
     - name: "GCP: Create or modify disk '{{ server_name }}-storage'"
       google.cloud.gcp_compute_disk:
         auth_kind: serviceaccount
-        service_account_contents: "{{ lookup('ansible.builtin.env', 'GCP_SERVICE_ACCOUNT_CONTENTS') }}"
+        service_account_contents: "{{ gcp_service_account_contents }}"
         project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
         zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"  # add "-b" if the zone is not defined
         name: "{{ server_name }}-storage"
@@ -62,7 +87,7 @@
     - name: "GCP: Create or modify instance '{{ server_name }}'"
       google.cloud.gcp_compute_instance:
         auth_kind: serviceaccount
-        service_account_contents: "{{ lookup('ansible.builtin.env', 'GCP_SERVICE_ACCOUNT_CONTENTS') }}"
+        service_account_contents: "{{ gcp_service_account_contents }}"
         project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
         zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"  # add "-b" if the zone is not defined
         name: "{{ server_name | lower }}"
@@ -88,6 +113,8 @@
             access_configs:
               - name: External NAT
                 type: ONE_TO_ONE_NAT
+        scheduling:
+          preemptible: "{{ gcp_compute_instance_preemptible | default(false) | bool }}"
         labels:
           env: dblab
           server: "{{ server_name | lower }}"
@@ -135,7 +162,7 @@
     - name: "GCP: Delete instance '{{ server_name }}'"
       google.cloud.gcp_compute_instance:
         auth_kind: serviceaccount
-        service_account_contents: "{{ lookup('ansible.builtin.env', 'GCP_SERVICE_ACCOUNT_CONTENTS') }}"
+        service_account_contents: "{{ gcp_service_account_contents }}"
         project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
         zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"  # add "-b" if the zone is not defined
         name: "{{ server_name | lower }}"
@@ -144,7 +171,7 @@
     - name: "GCP: Delete disk '{{ server_name }}-storage'"
       google.cloud.gcp_compute_disk:
         auth_kind: serviceaccount
-        service_account_contents: "{{ lookup('ansible.builtin.env', 'GCP_SERVICE_ACCOUNT_CONTENTS') }}"
+        service_account_contents: "{{ gcp_service_account_contents }}"
         project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
         zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"  # add "-b" if the zone is not defined
         name: "{{ server_name }}-storage"

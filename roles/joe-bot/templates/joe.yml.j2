@@ -1,0 +1,221 @@
+# Joe Bot configuration.
+# Copy this file to: ~/.dblab/joe/configs/joe.yml
+
+app:
+  # HTTP server IP address or host.
+  # Used only for Web UI and Slack Events API communication types.
+  # By default uses an empty string to accept connections to all network interfaces.
+  # Keep it default when running inside a Docker container.
+  host: ""
+
+  # HTTP server port. Used only for Web UI and Slack Events API communication types.
+  # Default: 2400.
+  port: 2400
+
+  # Minimal duration of long query processing used for notifications.
+  # When query processing is finished, a notification will be issued if duration
+  # has exceeded this value. Default: 60s.
+  minNotifyDuration: 60s
+
+  # Debug mode. Default: false.
+  debug: true
+
+# Integration with Postgres.ai Platform instance. It may be either
+# SaaS (https://postgres.ai) of self-managed instance (usually located inside
+# private infrastructure).
+platform:
+  # Postgres.ai Platform API base URL. Default: https://postgres.ai/api/general.
+  url: "{{ platform_url | default('https://postgres.ai/api/general') }}"
+
+  # Postgres.ai Platform API secret token.
+  token: "{{ joe_platform_token }}"
+
+  # Enable command history in Postgres.ai Platform for collaboration and
+  # visualization. Default: true.
+  historyEnabled: true
+
+# Register the application on the Platform.
+registration:
+  # Enable automatic registration. Default: false.
+  enable: false
+
+  # Public Joe Bot URL which is used to register on the Platform.
+  publicURL: "https://joe.example.com"
+
+# Channel Mapping is used to allow working with more than one database in
+# one Database Lab instance. This is useful when your PostgreSQL master node
+# has more than one application databases and you want to organize optimization
+# processes for all of them. Thanks to Channel Mapping you can use a single Joe
+# Bot instance.
+channelMapping:
+  # Active Database Lab instances that are used by this Joe Bot instance.
+  dblabServers:
+    # Alias for this Database Lab instance (internal, used only in this config)
+    prod1:
+      # URL of Database Lab API server
+      url: "http://{{ dblab_engine_container_host }}:{{ dblab_engine_port }}"
+      # Secret token used to communicate with Database Lab API
+      token: "{{ dblab_engine_verification_token }}"
+      # Allow changing requests timeout
+      requestTimeout: 60s
+
+  # Available communication types ("webui", "slack", "slackrtm", etc.)
+  communicationTypes:
+{% if joe_communication_type | lower == 'webui' %}
+    # Communication type: Web UI (part of Postgres.ai Platform).
+    webui:
+      # Web UI name. Feel free to choose any name, it is just an alias.
+      - name: WebUI
+        credentials:
+          # Web UI signing secret. This secret verifies each request to ensure
+          # that it came from one of configured Web UI instances.
+          signingSecret: {{ joe_communication_signing_secret }}
+
+        channels:
+          # Web UI channel ID. Feel free to choose any name, it is just an alias.
+          # This is what users see in browser.
+          - channelID: {{ joe_communication_channels_channel_id }}
+
+            # Postgres.ai Platform project to which user sessions are to be assigned.
+            project: {{ joe_communication_channels_project }}
+
+            # Database Lab alias from the "dblabServers" section.
+            dblabServer: prod1
+
+            # PostgreSQL connection parameters used to connect to a clone.
+            # The username/password are not needed; they will be randomly
+            # generated each time a new clone is created.
+            dblabParams:
+              # It is recommended to leave "postgres" here, because this DB
+              # usually exists in any PostgreSQL setup.
+              dbname: {{ joe_dblab_params_dbname }}
+              # It is NOT recommended to work without SSL. This value will be
+              # used in a clone's pg_hba.conf. See https://www.postgresql.org/docs/current/libpq-ssl.html#LIBPQ-SSL-SSLMODE-STATEMENTS
+              sslmode: {{ joe_dblab_params_sslmode }}
+{% elif joe_communication_type | lower == 'slack' %}
+    # Communication type: Slack Events API.
+    slack:
+      # Workspace name. Feel free to choose any name, it is just an alias.
+      - name: Workspace
+
+        credentials:
+          # Bot User OAuth Access.
+          # See https://api.slack.com/authentication/token-types
+          accessToken: {{ joe_communication_slack_access_token }}
+
+          # Slack App Signing Secret.
+          # See https://api.slack.com/authentication/verifying-requests-from-slack
+          signingSecret: {{ joe_communication_slack_signing_secret }}
+
+        channels:
+          # Slack channel ID. In Slack app, right-click on the channel name,
+          # and choose "Additional options > Copy link". From that link, we
+          # need the last part starting with "C" (e.g., "C01234ABCDE").
+          - channelID: {{ joe_communication_channels_channel_id }}
+
+            # Postgres.ai Platform project to which user sessions are to be assigned.
+            project: {{ joe_communication_channels_project }}
+
+            # Database Lab alias from the "dblabServers" section.
+            dblabServer: prod1
+
+            # PostgreSQL connection parameters used to connect to a clone.
+            # The username/password are not needed; they will be randomly
+            # generated each time a new clone is created.
+            dblabParams:
+              # It is recommended to leave "postgres" here, because this DB
+              # usually exists in any PostgreSQL setup.
+              dbname: {{ joe_dblab_params_dbname }}
+              # It is NOT recommended to work without SSL. This value will be
+              # used in a clone's pg_hba.conf. See https://www.postgresql.org/docs/current/libpq-ssl.html#LIBPQ-SSL-SSLMODE-STATEMENTS
+              sslmode: {{ joe_dblab_params_sslmode }}
+{% elif joe_communication_type | lower == 'slackrtm' %}
+    # Communication type: SlackRTM.
+    slackrtm:
+      # Workspace name. Feel free to choose any name, it is just an alias.
+      - name: Workspace
+
+        credentials:
+          # Bot User OAuth Access.
+          # See https://api.slack.com/authentication/token-types
+          accessToken: {{ joe_communication_slack_access_token }}
+
+        channels:
+          # Slack channel ID. In Slack app, right-click on the channel name,
+          # and choose "Additional options > Copy link". From that link, we
+          # need the last part starting with "C" (e.g., "C01234ABCDE").
+          - channelID: {{ joe_communication_channels_channel_id }}
+
+            # Postgres.ai Platform project to which user sessions are to be assigned.
+            project: {{ joe_communication_channels_project }}
+
+            # Database Lab alias from the "dblabServers" section.
+            dblabServer: prod1
+
+            # PostgreSQL connection parameters used to connect to a clone.
+            # The username/password are not needed; they will be randomly
+            # generated each time a new clone is created.
+            dblabParams:
+              # It is recommended to leave "postgres" here, because this DB
+              # usually exists in any PostgreSQL setup.
+              dbname: {{ joe_dblab_params_dbname }}
+              # It is NOT recommended to work without SSL. This value will be
+              # used in a clone's pg_hba.conf. See https://www.postgresql.org/docs/current/libpq-ssl.html#LIBPQ-SSL-SSLMODE-STATEMENTS
+              sslmode: {{ joe_dblab_params_sslmode }}
+{% elif joe_communication_type | lower == 'slacksm' %}
+    # Communication type: Slack Socket Mode.
+    slacksm:
+      # Workspace name. Feel free to choose any name, it is just an alias.
+      - name: Workspace
+
+        # This mode requires AppLevel token in addition to bot token
+        # See https://api.slack.com/authentication/token-types
+        credentials:
+          # Bot User OAuth Access.
+          accessToken: {{ joe_communication_slack_access_token }}
+          # AppLevel token is required for connections:write scope
+          appLevelToken: {{ joe_communication_slack_app_level_token }}
+
+        channels:
+          # Slack channel ID. In Slack app, right-click on the channel name,
+          # and choose "Additional options > Copy link". From that link, we
+          # need the last part consisting of 9 letters starting with "C".
+          - channelID: {{ joe_communication_channels_channel_id }}
+
+            # Postgres.ai Platform project to which user sessions are to be assigned.
+            project: {{ joe_communication_channels_project }}
+
+            # Database Lab alias from the "dblabServers" section.
+            dblabServer: prod1
+
+            # PostgreSQL connection parameters used to connect to a clone.
+            # The username/password are not needed; they will be randomly
+            # generated each time a new clone is created.
+            dblabParams:
+              # It is recommended to leave "postgres" here, because this DB
+              # usually exists in any PostgreSQL setup.
+              dbname: {{ joe_dblab_params_dbname }}
+              # It is NOT recommended to work without SSL. This value will be
+              # used in a clone's pg_hba.conf. See https://www.postgresql.org/docs/current/libpq-ssl.html#LIBPQ-SSL-SSLMODE-STATEMENTS
+              sslmode: {{ joe_dblab_params_sslmode }}
+{% endif %}
+
+# Enterprise Edition options – only to use with active Postgres.ai Platform EE
+# subscription. Changing these options you confirm that you have active
+# subscription to Postgres.ai Platform Enterprise Edition.
+# See more: https://postgres.ai/docs/platform/postgres-ai-platform-overview
+enterprise:
+  quota:
+    # Limit request rates. Works in pair with "interval" value. Default: 10.
+    limit: 10
+
+    # Time interval (in seconds) to apply quota limit. Default: 60.
+    interval: 60
+
+  audit:
+    # Enable command logging. Default: false.
+    enabled: false
+
+  dblab:
+    # Limit the number of available Database Lab instances. Default: 1.
+    instanceLimit: 1

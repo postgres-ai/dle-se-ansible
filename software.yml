@@ -122,6 +122,10 @@
     - role: dblab-engine
     - role: dblab-cli
 
+    # Joe Bot
+    - role: joe-bot
+      when: joe_bot_install | bool
+
     # Proxy server
     - role: proxy
 

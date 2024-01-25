@@ -1,5 +1,26 @@
 ---
 
+- name: Check if DBLab CLI ('dblab') is already installed
+  ansible.builtin.shell: |
+    set -o pipefail;
+    dblab --version | awk '{print $3}' | tr -d 'v' | cut -d'-' -f1
+  args:
+    executable: /bin/bash
+  changed_when: false
+  failed_when: false
+  register: dblab_cli_installed_version
+  environment:
+    PATH: "{{ ansible_env.PATH }}:/usr/local/bin"
+  tags: wal-g, dblab_cli, dblab_cli_install
+
+- name: DBLab CLI ('dblab') is already installed
+  ansible.builtin.debug:
+    msg: "DBLab CLI ('dblab') is already installed, version {{ dblab_cli_installed_version.stdout }}. Skip the installation."
+  when:
+    - dblab_cli_installed_version.rc == 0
+    - dblab_cli_installed_version.stdout == cli_version
+  tags: cli, dblab_cli, dblab
+
 - block:
     - name: Install DBLab CLI ('dblab')
       ansible.builtin.shell: |
@@ -25,8 +46,9 @@
         group: "{{ username }}"
         mode: "0600"
   when:
-    - cli_install is defined
-    - cli_install | bool
-  tags: cli
+    - (cli_install is defined and cli_install | bool)
+    - (dblab_cli_installed_version.stderr is search("command not found") or
+       dblab_cli_installed_version.stdout != cli_version)
+  tags: cli, dblab_cli, dblab
 
 ...
