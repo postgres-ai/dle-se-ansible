@@ -5,5 +5,7 @@
 - name: Reload DBLab Engine to apply configuration changes
   ansible.builtin.command: "sudo docker exec {{ dblab_engine_container_name }} kill -SIGHUP 1"
   listen: "reload dblab_server"
+  register: dblab_reload_result
+  failed_when: dblab_reload_result.rc != 0 and "No such container" not in dblab_reload_result.stderr
 
 ...
