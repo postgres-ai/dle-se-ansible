@@ -1,30 +1,24 @@
 ---
 # Install Envoy Proxy
 - block:  # Debian/Ubuntu
-    - name: Download Envoy repository apt-key
-      ansible.builtin.get_url:
-        url: "https://deb.dl.getenvoy.io/public/gpg.8115BA8E629CC074.key"
-        dest: /tmp/gpg.8115BA8E629CC074.key
-        timeout: 60
-        owner: "{{ username }}"
-        group: "{{ username }}"
-        mode: "0644"
-
-    - name: Add Envoy repository apt-key
-      ansible.builtin.apt_key:
-        id: 8115BA8E629CC074
-        file: /tmp/gpg.8115BA8E629CC074.key
-        state: present
-
     - name: Add Envoy repository
-      ansible.builtin.apt_repository:
-        repo: "deb [arch=amd64] https://deb.dl.getenvoy.io/public/deb/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} main"
+      ansible.builtin.deb822_repository:
+        name: envoyproxy-repo
+        types: ["deb"]
+        uris: "https://apt.envoyproxy.io"
+        suites: "{{ ansible_distribution_release }}"
+        components: ["main"]
+        signed_by: "https://apt.envoyproxy.io/signing.key"
+        enabled: true
         state: present
+
+    - name: Update apt cache
+      ansible.builtin.apt:
         update_cache: true
 
     - name: Install Envoy Proxy
       ansible.builtin.apt:
-        name: "getenvoy-envoy"
+        name: "envoy"
         state: "present"
       register: apt_status
       until: apt_status is success

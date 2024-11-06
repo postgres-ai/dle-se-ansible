@@ -1,13 +1,11 @@
 ---
 
 # Repository
-apt_repository_keyservers: []
-apt_repository_keys:
-  - key: "https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg" # docker repository apt key
-  - key: "https://www.postgresql.org/media/keys/ACCC4CF8.asc"  # postgresql repository apt key
 apt_repository:
   - repo: "deb https://apt.postgresql.org/pub/repos/apt/ {{ ansible_distribution_release }}-pgdg main"  # postgresql apt repository
-  - repo: "deb [arch=amd64] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"  # docker repository
+    key: "https://apt.postgresql.org/pub/repos/apt/ACCC4CF8.asc"  # postgresql apt repository key
+  - repo: "deb https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} stable"  # docker apt repository
+    key: "https://download.docker.com/linux/{{ ansible_distribution | lower }}/gpg"  # docker repository apt key
 
 # Packages (for apt repo)
 system_packages:
@@ -25,7 +23,7 @@ system_packages:
   - s3fs
   - jq
 
-docker_version: "24.0.7"
+docker_version: "27.3.1"
 docker_version_full: "5:{{ docker_version }}-1~{{ ansible_distribution | lower }}.{{ ansible_distribution_version }}~{{ ansible_distribution_release }}"
 docker_packages:
   - "docker-ce={{ docker_version_full }}"
