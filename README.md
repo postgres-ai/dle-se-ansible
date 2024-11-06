@@ -9,7 +9,7 @@ The HowTo guide can be found here: [How to install DBLab Engine using the Postgr
 - You will need the `Org key` and `Project name` from the [Postgres.ai platform](https://console.postgres.ai). These are provided by the platform upon registration. You can find more details [here](https://postgres.ai/docs/how-to-guides/administration/install-dle-from-postgres-ai).
   - Keep in mind that without specifying these values in the `platform_org_key` and `platform_project_name` variables, the Ansible Playbook will not be executed.
 - For deployment on an existing server:
-  - Debian 11, 12, or Ubuntu 22.04
+  - Debian 11, 12, or Ubuntu 22.04, 24.04
   - Root privileges or sudo access
   - Data storage disk (which is larger than the size of the database)
 - For deployment in one of the supported clouds:
@@ -57,7 +57,7 @@ Note: if 'ssh_key_name' is not specified, with each new execution of the playboo
 
 | Variable | Description | Default value |
 |:---------|:------------|:-------------:|
-| `dblab_engine_version` (optional) | The DBLab Engine version. | `3.4.0` |
+| `dblab_engine_version` (optional) | The DBLab Engine version. | `3.5.0` |
 | `dblab_engine_ui_version` (optional) | The DBLab Engine UI version.| `{{ dblab_engine_version }}` |
 | `dblab_engine_verification_token` (required) | The token that is used to work with DBLab Engine API. | `some-secret-token` |
 | `dblab_engine_base_path`(optional) | The directory containing the DBLab Engine directories and the configuration files. | `/root/.dblab` |
@@ -169,7 +169,7 @@ export AWS_SECRET_ACCESS_KEY=**********
 docker run --rm -it \
   --env AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} \
   --env AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} \
-  postgresai/dle-se-ansible:v1.0 \
+  postgresai/dle-se-ansible:v1.1 \
     ansible-playbook deploy_dle.yml --extra-vars \
       "provision='aws' \
       server_name='dblab-server' \
@@ -178,7 +178,7 @@ docker run --rm -it \
       server_location='ca-central-1' \
       volume_size='200' \
       dblab_engine_verification_token='SMIgTlFeDdvs75Qg2GwfL18sCfyDf0O1' \
-      dblab_engine_version='3.4.0' \
+      dblab_engine_version='3.5.0' \
       zpool_datasets_number='3' \
       ssh_public_keys='ssh-ed25519 AAAAC*** alice.johnson@example.com' \
       platform_org_key='***********' \
@@ -193,11 +193,11 @@ Note: Specify the username and IP address of your server in the `dblab_host` var
 docker run --rm -it \
   -v $HOME/.ssh:/root/.ssh:ro \
   -e ANSIBLE_SSH_ARGS="-F none" \
-  postgresai/dle-se-ansible:v1.0 \
+  postgresai/dle-se-ansible:v1.1 \
     ansible-playbook deploy_dle.yml --extra-vars \
       "dblab_host='root@12.34.56.78' \
       zpool_datasets_number='3' \
-      dblab_engine_version='3.4.0' \
+      dblab_engine_version='3.5.0' \
       dblab_engine_verification_token='super-secret-value' \
       platform_org_key='***********' \
       platform_project_name='dblab-server'"
@@ -217,7 +217,7 @@ Note: In this example, we use `$HOME/.ssh:/root/.ssh:ro` to mount a directory wi
 docker run --rm -it \
   -v $HOME/.ssh:/root/.ssh:ro \
   -e ANSIBLE_SSH_ARGS="-F none" \
-  postgresai/dle-se-ansible:v1.0 \
+  postgresai/dle-se-ansible:v1.1 \
     ansible-playbook software.yml --tags proxy --extra-vars \
       "dblab_host='root@12.34.56.78' \
       proxy_install='true' \
@@ -238,11 +238,11 @@ docker run --rm -it \
   -v $HOME/.ssh:/root/.ssh:ro \
   -v /path/to/config:/root/config:ro \
   -e ANSIBLE_SSH_ARGS="-F none" \
-  postgresai/dle-se-ansible:v1.0 \
+  postgresai/dle-se-ansible:v1.1 \
     ansible-playbook software.yml --extra-vars \
       "dblab_host='root@12.34.56.78' \
       zpool_datasets_number='3' \
-      dblab_engine_version='3.4.0' \
+      dblab_engine_version='3.5.0' \
       dblab_engine_config_file='/root/config/server.yml' \
       platform_org_key='***********' \
       platform_project_name='dblab-server'"

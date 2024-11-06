@@ -24,7 +24,7 @@ dblab_engine_meta_path: "{{ dblab_engine_base_path }}/engine/meta"
 dblab_engine_logs_path: "{{ dblab_engine_base_path }}/engine/logs"
 dblab_engine_dump_location: "{{ zpool_mount_dir }}/{{ zpool_name }}/{{ zpool_datasets_name }}_1/dump"  # Use a dataset directory for dumping data
 dblab_engine_port: 2345
-dblab_engine_version: 3.4.0
+dblab_engine_version: 3.5.0
 dblab_engine_image: "postgresai/dblab-server:{{ dblab_engine_version | replace('v', '') }}"
 dblab_engine_ui_version: "{{ dblab_engine_version | replace('v', '') }}"
 dblab_engine_ui_image: "postgresai/ce-ui:{{ dblab_engine_ui_version }}"
@@ -57,7 +57,7 @@ cli_environment_id: "{{ platform_project_name }}"
 
 # Joe Bot
 joe_bot_install: false # do not install Joe Bot by default
-joe_version: 0.11.0-rc.4
+joe_version: 0.11.0-rc.5
 joe_config_path: "{{ dblab_engine_base_path }}/joe/configs"
 joe_meta_path: "{{ dblab_engine_base_path }}/joe/meta"
 joe_image: "postgresai/joe:{{ joe_version | replace('v', '') }}"
