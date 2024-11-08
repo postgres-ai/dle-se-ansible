@@ -24,7 +24,7 @@
         port: "{{ dblab_engine_port }}"
         host: "localhost"
         state: started
-        timeout: 120
+        timeout: "{{ dblab_engine_start_timeout | default(300) }}"
         delay: 10
       ignore_errors: false
 
@@ -33,7 +33,7 @@
         url: "http://localhost:{{ dblab_engine_port }}/healthz"
       register: _result
       until: _result.status == 200
-      retries: 10
+      retries: "{{ (dblab_engine_start_timeout | default(300)) // 10 }}"
       delay: 10
 
     - name: Ensure DBLab Engine UI is available
@@ -41,7 +41,7 @@
         port: "{{ dblab_engine_ui_port }}"
         host: "localhost"
         state: started
-        timeout: 120
+        timeout: "{{ dblab_engine_start_timeout | default(300) }}"
         delay: 10
       ignore_errors: false
 

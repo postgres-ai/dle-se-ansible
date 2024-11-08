@@ -45,6 +45,7 @@ dblab_engine_container_default_volumes:
 dblab_engine_container_additional_volumes: []
 #  - "{{ dblab_engine_base_path }}/preprocess.sh:/tmp/preprocess.sh"
 #  - "/etc/wal-g.d/gcs.json:/tmp/sa.json:rshared"
+dblab_engine_start_timeout: 300  # Maximum wait time for DBLab Engine availability after startup.
 
 # Platform
 platform_project_name: ""  # Project name
