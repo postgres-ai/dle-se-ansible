@@ -43,6 +43,8 @@
         executable: pip3
         extra_args: "--trusted-host=pypi.python.org --trusted-host=pypi.org --trusted-host=files.pythonhosted.org"
         umask: "0022"
+      environment:
+        PIP_BREAK_SYSTEM_PACKAGES: "1"
 
     - name: Set certbot_script variable
       ansible.builtin.set_fact:
