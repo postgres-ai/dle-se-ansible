@@ -90,7 +90,7 @@ proxy_install: false # Set "true" to install Envoy proxy and issue Let's Encrypt
 proxy_dblab_engine_public_port: 443
 proxy_joe_public_port: 444
 certbot_install_method: pip
-certbot_install_version: 2.6.0
+certbot_install_version: 3.0.1
 certbot_create_if_missing: true
 certbot_create_method: standalone
 certbot_auto_renew: true

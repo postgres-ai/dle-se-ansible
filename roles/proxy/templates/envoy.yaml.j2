@@ -11,7 +11,7 @@ static_resources:
   clusters:
 {% for i in range(dblab_engine_clone_port_pool.from, dblab_engine_clone_port_pool.to + 1) %}
   - name: dblab_clone_{{ i }}
-    connect_timeout: 1s
+    connect_timeout: 5s
     type: STRICT_DNS
     load_assignment:
       cluster_name: dblab_clone_{{ i }}
@@ -25,7 +25,7 @@ static_resources:
 {% endfor %}
   - name: dblab-engine-ui-http
     type: STRICT_DNS
-    connect_timeout: 1s
+    connect_timeout: 5s
     load_assignment:
       cluster_name: dblab-engine-ui-http
       endpoints:
@@ -37,7 +37,7 @@ static_resources:
                 port_value: {{ dblab_engine_ui_port }}
   - name: joe-api-http
     type: STRICT_DNS
-    connect_timeout: 1s
+    connect_timeout: 5s
     load_assignment:
       cluster_name: joe-api-http
       endpoints:
@@ -49,7 +49,7 @@ static_resources:
                 port_value: {{ joe_port }}
   - name: ciobserver-api-http
     type: STRICT_DNS
-    connect_timeout: 1s
+    connect_timeout: 5s
     load_assignment:
       cluster_name: ciobserver-api-http
       endpoints:
@@ -116,6 +116,8 @@ static_resources:
                   cluster: dblab-engine-ui-http
           http_filters:
           - name: envoy.filters.http.router
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
       transport_socket:
         name: envoy.transport_sockets.tls
         typed_config:
@@ -150,6 +152,8 @@ static_resources:
                   cluster: joe-api-http
           http_filters:
           - name: envoy.filters.http.router
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
       transport_socket:
         name: envoy.transport_sockets.tls
         typed_config:
@@ -185,6 +189,8 @@ static_resources:
                   timeout: "0s"
           http_filters:
           - name: envoy.filters.http.router
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
       transport_socket:
         name: envoy.transport_sockets.tls
         typed_config:
