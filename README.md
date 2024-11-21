@@ -9,7 +9,7 @@ The HowTo guide can be found here: [How to install DBLab Engine using the Postgr
 - You will need the `Org key` and `Project name` from the [Postgres.ai platform](https://console.postgres.ai). These are provided by the platform upon registration. You can find more details [here](https://postgres.ai/docs/how-to-guides/administration/install-dle-from-postgres-ai).
   - Keep in mind that without specifying these values in the `platform_org_key` and `platform_project_name` variables, the Ansible Playbook will not be executed.
 - For deployment on an existing server:
-  - Ubuntu 22.04
+  - Ubuntu 22.04 is currently a requirement (other versions Ubuntu and Debian might also work with some issues)
   - Root privileges or sudo access
   - Data storage disk (which is larger than the size of the database)
 - For deployment in one of the supported clouds:
