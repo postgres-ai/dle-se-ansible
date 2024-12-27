@@ -5,14 +5,10 @@ stages:
   - test-deploy
   - test-destroy
 
-variables: 
-  DOCKER_HOST: tcp://127.0.0.1:2375
-  DOCKER_TLS_CERTDIR: ""
-
 before_script:
+  - export TERM=xterm
   - export TAG="${CI_COMMIT_TAG:-${CI_COMMIT_REF_SLUG}}"
   - export CLEARED_TAG=${TAG//[^a-zA-Z0-9]/}  # remove dots in tags and all characters except letters and numbers
-  - export TERM=xterm
 
 yamllint:
   stage: lint
@@ -35,9 +31,9 @@ molecule-test:
   script:
     - make bootstrap-dev
     - make molecule-test
+  allow_failure: true  # allow build image even if the test failed
   tags:
     - dle-test
-  allow_failure: true  # allow build image even if the test failed
 
 build:
   stage: build
@@ -64,7 +60,7 @@ deploy-test-hetzner:
           server_location='ash' \
           volume_size='30' \
           dblab_engine_verification_token='ci-test-token' \
-          dblab_engine_version='3.4.0' \
+          dblab_engine_version='3.5.0' \
           zpool_datasets_number='2' \
           platform_org_key=${PLATFORM_ORG_KEY} \
           platform_url='https://v2.postgres.ai/api/general' \
@@ -105,7 +101,7 @@ deploy-test-digitalocean:
           server_location='nyc1' \
           volume_size='30' \
           dblab_engine_verification_token='ci-test-token' \
-          dblab_engine_version='3.4.0' \
+          dblab_engine_version='3.5.0' \
           zpool_datasets_number='2' \
           platform_org_key=${PLATFORM_ORG_KEY} \
           platform_url='https://v2.postgres.ai/api/general' \
@@ -149,7 +145,7 @@ destroy-test-digitalocean:
 #          server_location='us-east-2' \
 #          volume_size='30' \
 #          dblab_engine_verification_token='ci-test-token' \
-#          dblab_engine_version='3.4.0' \
+#          dblab_engine_version='3.5.0' \
 #          zpool_datasets_number='2' \
 #          platform_org_key=${PLATFORM_ORG_KEY} \
 #          platform_url='https://v2.postgres.ai/api/general' \
@@ -192,7 +188,7 @@ destroy-test-digitalocean:
 #          server_location='us-central1' \
 #          volume_size='30' \
 #          dblab_engine_verification_token='ci-test-token' \
-#          dblab_engine_version='3.4.0' \
+#          dblab_engine_version='3.5.0' \
 #          zpool_datasets_number='2' \
 #          platform_org_key=${PLATFORM_ORG_KEY} \
 #          platform_url='https://v2.postgres.ai/api/general' \

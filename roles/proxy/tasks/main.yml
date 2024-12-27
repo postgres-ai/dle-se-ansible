@@ -18,7 +18,7 @@
 
     - name: Install Envoy Proxy
       ansible.builtin.apt:
-        name: "envoy"
+        name: "envoy-contrib-{{ proxy_version }}"
         state: "present"
       register: apt_status
       until: apt_status is success

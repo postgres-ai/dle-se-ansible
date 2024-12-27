@@ -134,6 +134,7 @@ Note: Joe Bot repository: https://gitlab.com/postgres-ai/joe
 | Variable | Description | Default value |
 |:---------|:------------|:-------------:|
 | `proxy_install` (optional) | Install Envoy proxy and issue Let's Encrypt certificate. Used to provide public access to the dblab UI/API using an encrypted connection.  | `false` |
+| `proxy_version` (optional) | Version to install Envoy proxy. | `1.32` |
 | `proxy_dblab_engine_public_port` (optional) | The port on which the dblab UI is publicly accessible. | `443` |
 | `certbot_install_method` (optional) | Controls how Certbot is installed. Available options are 'package', 'snap', and 'pip'. | `pip` |
 | `certbot_install_version` (optional) | Certbot version (if 'certbot_install_method: pip'). | `2.6.0` |
