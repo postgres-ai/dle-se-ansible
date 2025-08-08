@@ -83,9 +83,9 @@
     - role: packages
     - role: zpool
 
-    # Configure and start DLE
-    - role: dle
-    - role: cli
+    # Configure and start DBLab Engine
+    - role: dblab-engine
+    - role: dblab-cli
 
     # Proxy server
     - role: proxy
