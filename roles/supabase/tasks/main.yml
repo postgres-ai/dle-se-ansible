@@ -1,7 +1,7 @@
 ---
 
 - name: Pull Supabase Docker images
-  docker_image:
+  community.docker.docker_image:
     name: "{{ item }}"
     source: pull
   loop: "{{ supabase_images + [supabase_runner_image] }}"
@@ -14,7 +14,7 @@
     - supabase_images | length > 0
 
 - name: Create Supabase Runner network
-  docker_network:
+  community.docker.docker_network:
     name: "{{ supabase_runner_network }}"
     driver: bridge
     driver_options:
@@ -24,24 +24,27 @@
     state: present
 
 - name: Connect DBLab server container to Supabase network
-  docker_network:
+  community.docker.docker_network:
     name: "{{ supabase_runner_network }}"
     connected:
       - "{{ dblab_engine_container_name }}"
     appends: true
 
 - name: Create Supabase Runner config dir
-  file:
+  ansible.builtin.file:
     dest: "{{ supabase_runner_config_path }}"
     state: directory
+    owner: "{{ username }}"
+    group: "{{ username }}"
+    mode: "0755"
 
 # if dle_config_file is defined, copy the server.yml file
 - name: Copy Supabase env file to '{{ supabase_runner_env_file }}'
-  copy:
+  ansible.builtin.copy:
     dest: "{{ supabase_runner_env_file }}"
     owner: "{{ username }}"
     group: "{{ username }}"
-    mode: 0600
+    mode: "0600"
     content: |
       SUPABASE_ANON_KEY={{ supabase_anon_key }}
       SUPABASE_SERVICE_ROLE_KEY={{ supabase_service_role_key }}
@@ -49,7 +52,7 @@
       # Additional variables can be added here when wiring more services
 
 - name: Run Supabase Runner container
-  docker_container:
+  community.docker.docker_container:
     name: dblab_supabase_runner
     image: "{{ supabase_runner_image }}"
     state: started
@@ -77,7 +80,7 @@
       FUNCTIONS_IMAGE: "{{ supabase_functions_image }}"
 
 - name: Wait for Supabase Runner to be ready
-  wait_for:
+  ansible.builtin.wait_for:
     host: 127.0.0.1
     port: "{{ supabase_runner_port }}"
     delay: 10

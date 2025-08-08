@@ -43,7 +43,7 @@ dblab_engine_container_default_volumes:
   - "{{ dblab_engine_meta_path }}:/home/dblab/meta"
   - "{{ dblab_engine_logs_path }}:/home/dblab/logs"
   - "{{ zpool_mount_dir }}:{{ zpool_mount_dir }}:rshared"
-  - "{{ dblab_engine_dump_location }}:{{ dblab_engine_dump_location }}"  # TODO: comment out after merging https://gitlab.com/postgres-ai/database-lab/-/merge_requests/778
+  - "{{ dblab_engine_dump_location }}:{{ dblab_engine_dump_location }}"
   - /sys/kernel/debug:/sys/kernel/debug:rw
   - /lib/modules:/lib/modules:ro
   - /proc:/host_proc:ro

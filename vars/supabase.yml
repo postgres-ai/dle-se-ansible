@@ -11,17 +11,16 @@ supabase_runner_token: "secret-token"
 supabase_runner_network: "dblab_supabase_network"
 supabase_runner_config_path: "{{ dblab_engine_base_path }}/supabase"
 supabase_runner_env_file: "{{ supabase_runner_config_path }}/env"
-
 # Supabase images
-supabase_rest_image: "postgrest/postgrest:v11.1.0"
-supabase_auth_image: "supabase/gotrue:v2.74.2"
-supabase_studio_image: "supabase/studio:0.23.05_amd64"
-supabase_kong_image: "kong:2.8.3"
-supabase_realtime_image: "supabase/realtime:v2.14.0"
-supabase_storage_image: "supabase/storage-api:v0.40.1"
+supabase_rest_image: "postgrest/postgrest:latest"
+supabase_auth_image: "supabase/auth:v2.178.0"
+supabase_studio_image: "supabase/studio:2025.08.04-sha-6e99ca6"
+supabase_kong_image: "kong:2.8.1"
+supabase_realtime_image: "supabase/realtime:v2.25.40"
+supabase_storage_image: "supabase/storage-api:v1.26.2"
 supabase_imgproxy_image: "darthsim/imgproxy:v3.18"
-supabase_meta_image: "supabase/postgres-meta:v0.66.2"
-supabase_functions_image: "supabase/edge-runtime:v1.5.0"
+supabase_meta_image: "supabase/postgres-meta:v0.91.5"
+supabase_functions_image: "supabase/edge-runtime:v1.68.3"
 
 supabase_images:
   - "{{ supabase_rest_image }}"
@@ -36,6 +35,7 @@ supabase_images:
 
 
 supabase_jwt_secret: "your-super-secret-jwt-token-with-at-least-32-characters-long"
-supabase_anon_key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE"
-supabase_service_role_key: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJzZXJ2aWNlX3JvbGUiLAogICAgImlzcyI6ICJzdXBhYmFzZS1kZW1vIiwKICAgICJpYXQiOiAxNjQxNzY5MjAwLAogICAgImV4cCI6IDE3OTk1MzU2MDAKfQ.DaYlNEoUrrEn2Ig7tqibS-PHK5vgusbcbo7X36XVt4Q"
-
+supabase_anon_key: |
+  eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJhbm9uIiwKICAgICJpc3MiOiAic3VwYWJhc2UtZGVtbyIsCiAgICAiaWF0IjogMTY0MTc2OTIwMCwKICAgICJleHAiOiAxNzk5NTM1NjAwCn0.dc_X5iR_VP_qT0zsiyj_I_OZ2T9FtRU2BBNWN8Bu4GE
+supabase_service_role_key: |
+  eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyAgCiAgICAicm9sZSI6ICJzZXJ2aWNlX3JvbGUiLAogICAgImlzcyI6ICJzdXBhYmFzZS1kZW1vIiwKICAgICJpYXQiOiAxNjQxNzY5MjAwLAogICAgImV4cCI6IDE3OTk1MzU2MDAKfQ.DaYlNEoUrrEn2Ig7tqibS-PHK5vgusbcbo7X36XVt4Q

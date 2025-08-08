@@ -14,8 +14,8 @@
   hosts: dle_group
   gather_facts: false
   tasks:
-    - name: "set_fact: ansible_ssh_private_key_file"
-      set_fact:
+    - name: "Set fact: ansible_ssh_private_key_file"
+      ansible.builtin.set_fact:
         ansible_ssh_private_key_file: "~{{ lookup('env', 'USER') }}/.ssh/dle_key_tmp"
       tags: always
       when:
@@ -34,28 +34,28 @@
 
   pre_tasks:
     - name: Checking Linux distribution
-      fail:
+      ansible.builtin.fail:
         msg: "{{ ansible_distribution }} is not supported"
       when: ansible_distribution not in os_valid_distributions
       tags: always
 
     - name: Checking version of OS Linux
-      fail:
+      ansible.builtin.fail:
         msg: "{{ ansible_distribution_version }} of {{ ansible_distribution }} is not supported"
       when: ansible_distribution_version is version_compare(os_minimum_versions[ansible_distribution], '<')
       tags: always
 
     - name: Include OS-specific variables
-      include_vars: "vars/{{ ansible_os_family }}.yml"
+      ansible.builtin.include_vars: "vars/{{ ansible_os_family }}.yml"
       tags: always
 
     - name: Include Supabase variables
-      include_vars: vars/supabase.yml
+      ansible.builtin.include_vars: vars/supabase.yml
       when: supabase_components | bool
       tags: always
 
     - name: Update apt cache
-      apt:
+      ansible.builtin.apt:
         update_cache: true
         cache_valid_time: 3600
       register: apt_status
@@ -65,7 +65,7 @@
       when: ansible_os_family == "Debian"
 
     - name: Make sure the gnupg and apt-transport-https packages are present
-      apt:
+      ansible.builtin.apt:
         pkg:
           - gnupg
           - apt-transport-https
