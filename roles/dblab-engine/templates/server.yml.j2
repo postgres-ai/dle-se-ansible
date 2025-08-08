@@ -198,12 +198,7 @@ retrieval:
         <<: *db_container
         # The dump file will be automatically created on this location and then used to restore.
         # Ensure that there is enough disk space.
-<<<<<<<< HEAD:roles/dle/templates/3.4/server.yml.j2
-        # If you specify dumpLocation outside the mountDir, add this location as a volume to the DLE container.
-        dumpLocation: "{{ dle_dump_location }}"
-========
         dumpLocation: "{{ dblab_engine_dump_location }}"
->>>>>>>> main:roles/dblab-engine/templates/server.yml.j2
 
         # Source of data.
         source:
@@ -277,12 +272,7 @@ retrieval:
       options:
         <<: *db_container
         # The location of the archive files (or directories, for directory-format archives) to be restored.
-<<<<<<<< HEAD:roles/dle/templates/3.4/server.yml.j2
-        # If you specify dumpLocation outside the mountDir, add this location as a volume to the DLE container.
-        dumpLocation: "{{ dle_dump_location }}"
-========
         dumpLocation: "{{ dblab_engine_dump_location }}"
->>>>>>>> main:roles/dblab-engine/templates/server.yml.j2
 
         # Use parallel jobs to restore faster.
         # If your machine with DBLab Engine has 4 vCPUs or less, and you don't want to saturate them, use 2 or 1.
