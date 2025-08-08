@@ -9,7 +9,7 @@ supabase_runner_port: 8080
 supabase_runner_url: "http://dblab_supabase_runner:{{ supabase_runner_port }}"
 supabase_runner_token: "secret-token"
 supabase_runner_network: "dblab_supabase_network"
-supabase_runner_config_path: "{{ dle_base_path }}/supabase"
+supabase_runner_config_path: "{{ dblab_engine_base_path }}/supabase"
 supabase_runner_env_file: "{{ supabase_runner_config_path }}/env"
 
 # Supabase images
@@ -26,13 +26,13 @@ supabase_functions_image: "supabase/edge-runtime:v1.5.0"
 supabase_images:
   - "{{ supabase_rest_image }}"
   - "{{ supabase_auth_image }}"
-#  - "{{ supabase_studio_image }}"
-#  - "{{ supabase_kong_image }}"
-#  - "{{ supabase_realtime_image }}"
-#  - "{{ supabase_storage_image }}"
-#  - "{{ supabase_imgproxy_image }}"
-#  - "{{ supabase_meta_image }}"
-#  - "{{ supabase_functions_image }}"
+  - "{{ supabase_studio_image }}"
+  - "{{ supabase_kong_image }}"
+  - "{{ supabase_realtime_image }}"
+  - "{{ supabase_storage_image }}"
+  - "{{ supabase_imgproxy_image }}"
+  - "{{ supabase_meta_image }}"
+  - "{{ supabase_functions_image }}"
 
 
 supabase_jwt_secret: "your-super-secret-jwt-token-with-at-least-32-characters-long"

@@ -27,7 +27,7 @@
   docker_network:
     name: "{{ supabase_runner_network }}"
     connected:
-      - "{{ dle_container_name }}"
+      - "{{ dblab_engine_container_name }}"
     appends: true
 
 - name: Create Supabase Runner config dir
@@ -37,12 +37,16 @@
 
 # if dle_config_file is defined, copy the server.yml file
 - name: Copy Supabase env file to '{{ supabase_runner_env_file }}'
-  template:
-    src: templates/.env.example.j2
+  copy:
     dest: "{{ supabase_runner_env_file }}"
     owner: "{{ username }}"
     group: "{{ username }}"
     mode: 0600
+    content: |
+      SUPABASE_ANON_KEY={{ supabase_anon_key }}
+      SUPABASE_SERVICE_ROLE_KEY={{ supabase_service_role_key }}
+      SUPABASE_JWT_SECRET={{ supabase_jwt_secret }}
+      # Additional variables can be added here when wiring more services
 
 - name: Run Supabase Runner container
   docker_container:
@@ -64,6 +68,13 @@
       NETWORK_NAME: "{{ supabase_runner_network }}"
       POSTGREST_IMAGE: "{{ supabase_rest_image }}"
       AUTH_IMAGE: "{{ supabase_auth_image }}"
+      STUDIO_IMAGE: "{{ supabase_studio_image }}"
+      KONG_IMAGE: "{{ supabase_kong_image }}"
+      REALTIME_IMAGE: "{{ supabase_realtime_image }}"
+      STORAGE_IMAGE: "{{ supabase_storage_image }}"
+      IMGPROXY_IMAGE: "{{ supabase_imgproxy_image }}"
+      META_IMAGE: "{{ supabase_meta_image }}"
+      FUNCTIONS_IMAGE: "{{ supabase_functions_image }}"
 
 - name: Wait for Supabase Runner to be ready
   wait_for:
