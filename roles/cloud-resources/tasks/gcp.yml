@@ -1,0 +1,183 @@
+---
+# Dependencies
+- name: Install Python dependencies
+  block:
+    - name: Ensure that 'python3-pip' package is present on controlling host
+      ansible.builtin.package:
+        name: python3-pip
+        state: present
+      register: package_status
+      until: package_status is success
+      delay: 10
+      retries: 3
+      delegate_to: 127.0.0.1
+      run_once: true
+      when: ansible_distribution != "MacOSX"
+
+    - name: Ensure that 'google-auth' dependency is present on controlling host
+      ansible.builtin.pip:
+        name: google-auth
+        extra_args: --user
+      environment:
+        PIP_BREAK_SYSTEM_PACKAGES: "1"
+      delegate_to: 127.0.0.1
+      become: false
+      vars:
+        ansible_become: false
+      run_once: true
+
+# Check if GCP_SERVICE_ACCOUNT_CONTENTS is defined
+- name: Lookup the GCP_SERVICE_ACCOUNT_CONTENTS environmental variable
+  ansible.builtin.set_fact:
+    gcp_service_account_contents_raw: "{{ lookup('ansible.builtin.env', 'GCP_SERVICE_ACCOUNT_CONTENTS') | default('') }}"
+  no_log: true
+
+- name: "Fail if no GCP service account information is provided"
+  ansible.builtin.fail:
+    msg: "GCP_SERVICE_ACCOUNT_CONTENTS is not defined or empty. Please provide GCP service account credentials."
+  when: gcp_service_account_contents_raw | length < 1
+
+# Decode GCP Service Account if base64 encoded
+- name: "Set variable: gcp_service_account_contents (b64decode)"
+  ansible.builtin.set_fact:
+    gcp_service_account_contents: "{{ gcp_service_account_contents_raw | b64decode }}"
+  no_log: true
+  when: gcp_service_account_contents_raw is match('^[a-zA-Z0-9+/]+={0,2}$')
+
+# Set GCP Service Account Contents to raw value if not base64 encoded
+- name: "Set variable: gcp_service_account_contents"
+  ansible.builtin.set_fact:
+    gcp_service_account_contents: "{{ gcp_service_account_contents_raw }}"
+  no_log: true
+  when: gcp_service_account_contents is not defined
+
+# Project info
+- name: "GCP: Gather information about project"
+  google.cloud.gcp_resourcemanager_project_info:
+    auth_kind: serviceaccount
+    service_account_contents: "{{ gcp_service_account_contents }}"
+  register: project_info
+  when: gcp_project is not defined or gcp_project | length < 1
+
+# Create (if state is present)
+- block:
+    # if ssh_key_content is not defined, get the user public key from the system (if exists)
+    - name: "GCP: set_fact ssh_key_content"
+      ansible.builtin.set_fact:
+        ssh_key_content: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+      no_log: true  # do not display the public key
+      when: ssh_key_content is not defined or
+            ssh_key_content | length < 1
+
+    - name: "GCP: set_fact gcp_network_name"
+      ansible.builtin.set_fact:
+        gcp_network_name: "{{ server_network if server_network is defined and server_network | length > 0 else 'default' }}"
+
+    - name: "GCP: Create or modify disk '{{ server_name }}-storage'"
+      google.cloud.gcp_compute_disk:
+        auth_kind: serviceaccount
+        service_account_contents: "{{ gcp_service_account_contents }}"
+        project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
+        zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"  # add "-b" if the zone is not defined
+        name: "{{ server_name }}-storage"
+        size_gb: "{{ volume_size | int }}"
+        state: present
+        labels:
+          env: dblab
+          server: "{{ server_name | lower }}"
+
+    - name: "GCP: Create or modify instance '{{ server_name }}'"
+      google.cloud.gcp_compute_instance:
+        auth_kind: serviceaccount
+        service_account_contents: "{{ gcp_service_account_contents }}"
+        project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
+        zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"  # add "-b" if the zone is not defined
+        name: "{{ server_name | lower }}"
+        machine_type: "{{ server_type }}"
+        disks:
+          - device_name: "{{ server_name }}-system"
+            auto_delete: true
+            boot: true
+            type: "{{ volume_type | default('pd-standard') }}"
+            initialize_params:
+              disk_name: "{{ server_name }}-system"
+              source_image: "{{ server_image }}"
+              disk_size_gb: "{{ system_volume_size }}"  # system disk size
+          - device_name: "{{ server_name }}-storage"
+            auto_delete: true
+            type: "{{ volume_type | default('pd-ssd') }}"
+            initialize_params:
+              disk_name: "{{ server_name }}-storage"
+              disk_size_gb: "{{ volume_size | int }}"
+        network_interfaces:
+          - network:
+              selfLink: "projects/{{ gcp_project | default(project_info.resources[0].projectNumber) }}/global/networks/{{ gcp_network_name }}"
+            access_configs:
+              - name: External NAT
+                type: ONE_TO_ONE_NAT
+        scheduling:
+          preemptible: "{{ gcp_compute_instance_preemptible | default(false) | bool }}"
+        labels:
+          env: dblab
+          server: "{{ server_name | lower }}"
+        tags:
+          items:
+            - "dblab"
+            - "{{ server_name | lower }}"
+        metadata:
+          ssh-keys: "root:{{ ssh_key_content }}"
+        status: "{{ instance.status | default(omit) }}"
+        state: present
+      register: server_result
+  when: state == 'present'
+
+# Info
+- name: Show GCP instance info
+  ansible.builtin.debug:
+    msg:
+      - instance ID is {{ server_result.id }}
+      - instance Name is {{ server_result.name }}
+      - instance Image is {{ server_result.disks[0].licenses[0] | basename }}
+      - instance Type is {{ server_result.machineType | basename }}
+      - Block Storage Size is {{ volume_size }} gigabytes
+      - Public IP is {{ server_result.networkInterfaces[0].accessConfigs[0].natIP }}
+      - Private IP is {{ server_result.networkInterfaces[0].networkIP }}
+  when: server_result.id is defined
+
+# set_fact: dblab_host
+- name: "Set variable: dblab_host (for deploy DBLab Engine)"
+  ansible.builtin.set_fact:
+    dblab_host: "root@{{ server_result.networkInterfaces[0].accessConfigs[0].natIP }}"
+  when: server_result.networkInterfaces is defined
+
+- name: "Wait for host '{{ dblab_host }}' to be available via SSH"
+  ansible.builtin.wait_for:
+    host: "{{ server_result.networkInterfaces[0].accessConfigs[0].natIP }}"
+    port: 22
+    delay: 5
+    timeout: 300
+  become_user: root
+  when: server_result.networkInterfaces is defined
+
+# Delete (if state is absent)
+- block:
+    - name: "GCP: Delete instance '{{ server_name }}'"
+      google.cloud.gcp_compute_instance:
+        auth_kind: serviceaccount
+        service_account_contents: "{{ gcp_service_account_contents }}"
+        project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
+        zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"  # add "-b" if the zone is not defined
+        name: "{{ server_name | lower }}"
+        state: absent
+
+    - name: "GCP: Delete disk '{{ server_name }}-storage'"
+      google.cloud.gcp_compute_disk:
+        auth_kind: serviceaccount
+        service_account_contents: "{{ gcp_service_account_contents }}"
+        project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
+        zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"  # add "-b" if the zone is not defined
+        name: "{{ server_name }}-storage"
+        state: absent
+  when: state == 'absent'
+
+...

@@ -1,0 +1,189 @@
+---
+# DRAFT (not tested)
+
+# Dependencies
+- name: Install Python dependencies
+  block:
+    - name: Ensure that 'python3-pip' package is present on controlling host
+      ansible.builtin.package:
+        name: python3-pip
+        state: present
+      register: package_status
+      until: package_status is success
+      delay: 10
+      retries: 3
+      when: ansible_distribution != "MacOSX"
+
+    - name: Ensure that Azure collection is installed
+      ansible.builtin.command: ansible-galaxy collection list azure.azcollection
+      changed_when: false
+      failed_when: false
+      register: azcollection_result
+
+    - name: Azure collection not installed
+      ansible.builtin.fail:
+        msg:
+          - "Please install Azure collection"
+          - "ansible-galaxy collection install azure.azcollection"
+      when:
+        - azcollection_result.stderr is search("unable to find")
+
+    - name: Get 'ansible_collections' path
+      ansible.builtin.command: ansible-galaxy collection list | grep ansible_collections
+      register: collections_path
+      changed_when: false
+
+    - name: Install Azure collection requirements
+      ansible.builtin.pip:
+        requirements: "{{ collections_path.stdout.split()[-1] }}/azure/azcollection/requirements-azure.txt"
+        executable: pip3
+        extra_args: "--trusted-host=pypi.python.org --trusted-host=pypi.org --trusted-host=files.pythonhosted.org"
+        umask: "0022"
+      environment:
+        PIP_BREAK_SYSTEM_PACKAGES: "1"
+  delegate_to: 127.0.0.1
+  become: false
+  run_once: true
+
+# Create (if state is present)
+- name: "Azure: Create DBLab resource group"
+  azure.azcollection.azure_rm_resourcegroup:
+    name: "{{ azure_resourcegroup | default('DBLabEngineResourceGroup') }}"
+    location: "{{ server_location }}"
+
+- name: "Azure: Create DBLab virtual network"
+  azure.azcollection.azure_rm_virtualnetwork:
+    resource_group: "{{ azure_resourcegroup | default('DBLabEngineResourceGroup') }}"
+    name: "{{ azure_virtualnetwork | default('DBLabEngineNetwork') }}"
+    address_prefixes: "10.0.0.0/16"
+
+- name: "Azure: Create DBLab subnet"
+  azure.azcollection.azure_rm_subnet:
+    resource_group: "{{ azure_resourcegroup | default('DBLabEngineResourceGroup') }}"
+    name: "{{ azure_subnet | default('DBLabEngineNetworkSubnet') }}"
+    address_prefix: "10.0.1.0/24"
+    virtual_network: "{{ azure_virtualnetwork | default('DBLabEngineNetwork') }}"
+
+- name: "Azure: Create public IP address (for VM '{{ server_name }}')"
+  azure.azcollection.azure_rm_publicipaddress:
+    resource_group: "{{ azure_resourcegroup | default('DBLabEngineResourceGroup') }}"
+    allocation_method: static
+    name: "{{ azure_publicipaddress | default('DBLabEnginePublicIP') }}"
+  register: public_ip_result
+
+- name: "Azure: Create DBLab Network Security Group"
+  azure.azcollection.azure_rm_securitygroup:
+    resource_group: "{{ azure_resourcegroup | default('DBLabEngineResourceGroup') }}"
+    name: "{{ azure_securitygroup | default('DBLabEngineNetworkSecurityGroup') }}"
+    rules:
+      - name: SSH
+        protocol: Tcp
+        destination_port_range:
+          - 22
+          - "{{ proxy_dblab_engine_public_port }}"
+          - "{{ dblab_engine_port }}"
+          - "{{ dblab_engine_ui_port }}"
+          - "{{ netdata_port }}"
+        access: Allow
+        priority: 1001
+        direction: Inbound
+
+- name: "Azure: Create network interface (for VM '{{ server_name }}')"
+  azure.azcollection.azure_rm_networkinterface:
+    resource_group: "{{ azure_resourcegroup | default('DBLabEngineResourceGroup') }}"
+    name: "{{ azure_networkinterface | default('DBLabEngineInterface') }}"
+    virtual_network: "{{ azure_virtualnetwork | default('DBLabEngineNetwork') }}"
+    subnet: "{{ azure_subnet | default('DBLabEngineNetworkSubnet') }}"
+    public_ip_name: "{{ azure_publicipaddress | default('DBLabEnginePublicIP') }}"
+    security_group: "{{ azure_securitygroup | default('DBLabEngineNetworkSecurityGroup') }}"
+
+- name: "Azure: Create virtual machine '{{ server_name }}'"
+  azure.azcollection.azure_rm_virtualmachine:
+    resource_group: "{{ azure_resourcegroup | default('DBLabEngineResourceGroup') }}"
+    name: "{{ server_name | lower }}"
+    vm_size: "{{ server_type }}"
+    admin_username: root
+    ssh_password_enabled: false
+    ssh_public_keys:
+      - path: /root/.ssh/authorized_keys
+        key_data: "{{ ssh_key_content }}"
+    network_interfaces: "{{ azure_networkinterface | default('DBLabEngineInterface') }}"
+    os_type: Linux
+    image:
+      offer: "{{ azure_vm_image_offer | default('0001-com-ubuntu-server-focal') }}"
+      publisher: "{{ azure_vm_image_publisher | default('canonical') }}"
+      sku: "{{ azure_vm_image_sku | default('{{ server_image }}') }}"
+      version: "{{ azure_vm_image_version | default('latest') }}"
+    data_disks:
+      - lun: 0
+        disk_size_gb: "{{ volume_size | int }}"
+        managed_disk_type: "{{ volume_type | default('{{ StandardSSD_LRS }}') }}"
+  register: virtualmachine_result
+
+# Info
+- name: Show virtual machine info
+  ansible.builtin.debug:
+    var: virtualmachine_result
+  when: virtualmachine_result is defined
+
+# set_fact: dblab_host
+- name: "Set variable: dblab_host (for deploy DBLab)"
+  ansible.builtin.set_fact:
+    dblab_host: "root@{{ public_ip_result.state.ip_address }}"
+  when: public_ip_result.state.ip_address is defined
+
+- name: "Wait for host '{{ dblab_host }}' to be available via SSH"
+  ansible.builtin.wait_for:
+    host: "{{ public_ip_result.state.ip_address }}"
+    port: 22
+    delay: 5
+    timeout: 300
+  become_user: root
+  when: public_ip_result.state.ip_address is defined
+
+# Delete (if state is absent)
+- block:
+    - name: "Azure: Delete DBLab virtual machine '{{ server_name }}'"
+      azure.azcollection.azure_rm_virtualmachine:
+        resource_group: "{{ azure_resourcegroup | default('DBLabEngineResourceGroup') }}"
+        name: "{{ server_name | lower }}"
+        state: absent
+
+    - name: "Azure: Delete DBLab network interface"
+      azure.azcollection.azure_rm_networkinterface:
+        resource_group: "{{ azure_resourcegroup | default('DBLabEngineResourceGroup') }}"
+        name: "{{ azure_networkinterface | default('DBLabEngineInterface') }}"
+        state: absent
+
+    - name: "Azure: Delete DBLab Network Security Group"
+      azure.azcollection.azure_rm_securitygroup:
+        resource_group: "{{ azure_resourcegroup | default('DBLabEngineResourceGroup') }}"
+        name: "{{ azure_securitygroup | default('DBLabEngineNetworkSecurityGroup') }}"
+        state: absent
+
+    - name: "Azure: Delete DBLab public IP"
+      azure.azcollection.azure_rm_publicipaddress:
+        resource_group: "{{ azure_resourcegroup | default('DBLabEngineResourceGroup') }}"
+        name: "{{ azure_publicipaddress | default('DBLabEnginePublicIP') }}"
+        state: absent
+
+    - name: "Azure: Delete DBLab subnet"
+      azure.azcollection.azure_rm_subnet:
+        resource_group: "{{ azure_resourcegroup | default('DBLabEngineResourceGroup') }}"
+        virtual_network_name: "{{ azure_virtualnetwork | default('DBLabEngineNetwork') }}"
+        name: "{{ azure_subnet | default('DBLabEngineNetworkSubnet') }}"
+        state: absent
+
+    - name: "Azure: Delete DBLab virtual network"
+      azure.azcollection.azure_rm_virtualnetwork:
+        resource_group: "{{ azure_resourcegroup | default('DBLabEngineResourceGroup') }}"
+        name: "{{ azure_virtualnetwork | default('DBLabEngineNetwork') }}"
+        state: absent
+
+    - name: "Azure: Delete DBLab resource group"
+      azure.azcollection.azure_rm_resourcegroup:
+        name: "{{ azure_resourcegroup | default('DBLabEngineResourceGroup') }}"
+        state: absent
+  when: state == 'absent'
+
+...

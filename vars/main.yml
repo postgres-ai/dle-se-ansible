@@ -1,6 +1,6 @@
 ---
 # Server
-provision: none  # or 'aws', 'gcp', 'azure', 'digitalocean', 'hetzner' to create a virtual machine for DLE
+provision: none  # or 'aws', 'gcp', 'azure', 'digitalocean', 'hetzner' to create a virtual machine for DBLab Engine
 
 # System
 username: "root"  # system user, owner of configuration files
@@ -9,56 +9,93 @@ username: "root"  # system user, owner of configuration files
 zpool_disk: ""  # specify an empty disk for the ZFS pool (e.g.: /dev/sdb). If not specified, an attempt will be made to automatically detect an empty volume.
 zpool_name: "dblab_pool"
 zpool_mount_dir: "/var/lib/dblab"
-zpool_datasets_number: 2  # number of datasets for the ZFS pool. When the DLE is deployed, you can increase the number of datasets (if necessary).
+zpool_options: "-O compression=on -O atime=off -O recordsize=128k -O logbias=throughput"
+# Note: For a physical mode with a sync instance (physicalRestore.sync.enabled: true in DBLab config), consider a smaller 'recordsize' value like '8k'.
+# While 'recordsize=128k' enhances compression and performance for large-scale IO operations like index creation,
+# it may reduce WAL replay efficiency, potentially leading to increased lag.
+zpool_datasets_number: 2  # number of datasets for the ZFS pool. When the DBLab Engine is deployed, you can increase the number of datasets (if necessary).
+zpool_datasets_name: "dataset"  # base name for ZFS datasets. Suffixes (01, 02, etc.) are appended based on `zpool_datasets_number`.
 
-# DLE
-dle_verification_token: "some-secret-token"
-dle_base_path: "/root/.dblab"
-dle_config_path: "{{ dle_base_path }}/engine/configs"
-dle_meta_path: "{{ dle_base_path }}/engine/meta"
-dle_logs_path: "{{ dle_base_path }}/engine/logs"
-dle_dump_location: "{{ zpool_mount_dir }}/{{ zpool_name }}/dataset_1/dump"  # Use a dataset directory for dumping data
-dle_port: 2345
-dle_version: 3.4.0
-dle_image: "postgresai/dblab-server:{{ dle_version | replace('v', '') }}"
-dle_ui_version: "{{ dle_version | replace('v', '') }}"
-dle_ui_image: "postgresai/ce-ui:{{ dle_ui_version }}"
-dle_ui_port: 2346
-dle_platform_project_name: ""  # Project name
-dle_platform_org_key: ""  # Organization key
-dle_computing_infrastructure: "do"
-
-dle_container_host: 127.0.0.1
-dle_container_name: dblab_server
-dle_container_volumes:
+# DBLab Engine
+dblab_engine_verification_token: "some-secret-token"
+dblab_engine_base_path: "/root/.dblab"
+dblab_engine_config_path: "{{ dblab_engine_base_path }}/engine/configs"
+dblab_engine_meta_path: "{{ dblab_engine_base_path }}/engine/meta"
+dblab_engine_logs_path: "{{ dblab_engine_base_path }}/engine/logs"
+dblab_engine_dump_location: "{{ zpool_mount_dir }}/{{ zpool_name }}/{{ zpool_datasets_name }}_1/dump"  # Use a dataset directory for dumping data
+dblab_engine_port: 2345
+dblab_engine_version: 3.5.0
+dblab_engine_image: "postgresai/dblab-server:{{ dblab_engine_version | replace('v', '') }}"
+dblab_engine_ui_version: "{{ dblab_engine_version | replace('v', '') }}"
+dblab_engine_ui_image: "postgresai/ce-ui:{{ dblab_engine_ui_version }}"
+dblab_engine_ui_port: 2346
+dblab_engine_clone_port_pool:
+  from: 6000
+  to: 6100
+dblab_engine_clone_access_addresses: "127.0.0.1"  # IP addresses that can be used to access clones.
+dblab_engine_computing_infrastructure: "{{ provision }}"
+dblab_engine_container_host: 127.0.0.1
+dblab_engine_container_name: dblab_server
+dblab_engine_container_default_volumes:
   - /var/run/docker.sock:/var/run/docker.sock
+  - /var/lib/dblab:/var/lib/dblab/:rshared
+  - "{{ dblab_engine_config_path }}:/home/dblab/configs"
+  - "{{ dblab_engine_meta_path }}:/home/dblab/meta"
+  - "{{ dblab_engine_logs_path }}:/home/dblab/logs"
   - "{{ zpool_mount_dir }}:{{ zpool_mount_dir }}:rshared"
-  - "{{ dle_dump_location }}:{{ dle_dump_location }}"  # TODO: comment out after merging https://gitlab.com/postgres-ai/database-lab/-/merge_requests/778
-  - "{{ dle_config_path }}:/home/dblab/configs"
-  - "{{ dle_meta_path }}:/home/dblab/meta"
-  - "{{ dle_logs_path }}:/home/dblab/logs"
+  - "{{ dblab_engine_dump_location }}:{{ dblab_engine_dump_location }}"  # TODO: comment out after merging https://gitlab.com/postgres-ai/database-lab/-/merge_requests/778
   - /sys/kernel/debug:/sys/kernel/debug:rw
   - /lib/modules:/lib/modules:ro
   - /proc:/host_proc:ro
+dblab_engine_container_additional_volumes: []
+#  - "{{ dblab_engine_base_path }}/preprocess.sh:/tmp/preprocess.sh"
+#  - "/etc/wal-g.d/gcs.json:/tmp/sa.json:rshared"
+dblab_engine_start_timeout: 300  # Maximum wait time for DBLab Engine availability after startup.
 
-# If you specify 'dle_dump_location' outside the 'zpool_mount_dir', add this location as a volume to 'dle_container_volumes' variable.
-
+# Platform
+platform_project_name: ""  # Project name
+platform_org_key: ""  # Organization key
 # CLI
 cli_install: true
-cli_version: "{{ dle_version | replace('v', '') }}"
-cli_environment_id: "{{ dle_platform_project_name }}"
+cli_version: "{{ dblab_engine_version | replace('v', '') }}"
+cli_environment_id: "{{ platform_project_name }}"
+
+# Joe Bot
+joe_bot_install: false # do not install Joe Bot by default
+joe_version: 0.11.0-rc.5
+joe_config_path: "{{ dblab_engine_base_path }}/joe/configs"
+joe_meta_path: "{{ dblab_engine_base_path }}/joe/meta"
+joe_image: "postgresai/joe:{{ joe_version | replace('v', '') }}"
+joe_container_name: joe_bot
+joe_container_host: 127.0.0.1
+joe_port: 2400
+joe_platform_token: "platform_secret_token" # Postgres.ai Platform API secret token.
+joe_communication_type: "webui" # Available communication types ('webui', 'slack', 'slackrtm', 'slacksm')
+joe_communication_signing_secret: "secret_signing" # Web UI Signing Secret.
+joe_communication_slack_signing_secret: "secret_signing" # Slack App Signing Secret.
+joe_communication_slack_access_token: "xoxb-XXXX" # Bot User OAuth Access Token.
+joe_communication_slack_app_level_token: "xapp-XXXX" # App Level Token (for "slacksm").
+joe_communication_channels_channel_id: "{{ platform_project_name }}" # Web UI channel ID.
+joe_communication_channels_project: "{{ platform_project_name }}" # Postgres.ai Platform project to which user sessions are to be assigned.
+# PostgreSQL connection parameters used to connect Joe to the clone
+joe_dblab_params_dbname: "postgres"
+joe_dblab_params_sslmode: "prefer"
 
 # Monitoring
 
 # Netdata - https://github.com/netdata/netdata
 netdata_install: true
-netdata_version: 1.37.1
+netdata_version: 1.47.5-1
+netdata_image: "postgresai/netdata-for-dle:v{{ netdata_version | replace('v', '') }}"
 netdata_port: 19999
 
 # Proxy
 proxy_install: false # Set "true" to install Envoy proxy and issue Let's Encrypt certificate
-proxy_dle_public_port: 446
-certbot_install_method: snap
+proxy_version: 1.32 # Envoy proxy version
+proxy_dblab_engine_public_port: 443
+proxy_joe_public_port: 444
+certbot_install_method: pip
+certbot_install_version: 3.0.1
 certbot_create_if_missing: true
 certbot_create_method: standalone
 certbot_auto_renew: true
@@ -70,6 +107,8 @@ certbot_domain: "" # Domain to issue certificate, for example, example.com
 certbot_certs:
   - email: "{{ certbot_admin_email }}"
     domains:
-     - "{{ certbot_domain }}"
+      - "{{ certbot_domain }}"
 
+# Usage instructions
+print_usage_instructions: true # Print the usage instructions after deployment
 ...

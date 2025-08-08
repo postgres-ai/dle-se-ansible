@@ -1,0 +1,19 @@
+# netdatachurts.d configuration for Database lab Engine
+# /etc/netdata/charts.d/DBLab_Engine.conf
+
+# the data collection frequency
+# if unset, will inherit the netdata update frequency
+DBLab_Engine_update_every=60
+
+# the charts priority on the dashboard
+DBLab_Engine_priority=4000
+
+# the number of retries to do in case of failure
+# before disabling the module
+DBLab_Engine_retries=3
+
+# Database lab Engine options
+DBLab_Engine_token={{ dblab_engine_verification_token }}
+DBLab_Engine_protocol=http
+DBLab_Engine_ip={{ dblab_engine_container_host }}
+DBLab_Engine_port={{ dblab_engine_port }}

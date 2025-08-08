@@ -1,0 +1,30 @@
+---
+
+- block:
+    - name: Restart Joe Bot container
+      community.docker.docker_container:
+        name: "{{ joe_container_name }}"
+        image: "{{ joe_image }}"
+        state: started
+        restart: true
+        restart_policy: unless-stopped
+        container_default_behavior: "compatibility"
+        network_mode: host
+        volumes:
+          - "{{ joe_config_path }}:/home/configs"
+          - "{{ joe_meta_path }}:/home/meta"
+        ports:
+          - "{{ joe_container_host }}:{{ joe_port }}:2400"
+      register: joe_restart
+
+    - name: Wait for Joe Bot API port to be available
+      ansible.builtin.wait_for: # noqa no-handler
+        port: "{{ joe_port }}"
+        host: "localhost"
+        state: started
+        timeout: 60
+        delay: 10
+      when: joe_restart is changed
+  tags: joe, joe_container
+
+...

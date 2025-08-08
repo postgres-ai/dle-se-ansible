@@ -1,0 +1,24 @@
+---
+platforms:
+  - name: 10.172.0.20
+    hostname: dblab_test_server
+    image: "${DOCKER_IMAGE:-postgresai/docker-dind-systemd-ubuntu:22.04}"
+    networks:
+      - name: dblab_test_network
+        ipv4_address: 10.172.0.20
+    exposed_ports:
+      - 22/tcp
+      - 23450/tcp
+      - 23460/tcp
+      - 443/tcp
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup:rw
+      - /var/lib/dblab:/var/lib/dblab:rw,shared
+    cgroupns_mode: host
+    privileged: true
+    capabilities:
+      - SYS_ADMIN
+      - NET_ADMIN
+    pre_build_image: true
+    groups:
+      - dblab_group

@@ -1,0 +1,252 @@
+---
+# Dependencies
+- name: Install Python dependencies
+  block:
+    - name: Ensure that 'python3-pip' package is present on controlling host
+      ansible.builtin.package:
+        name: python3-pip
+        state: present
+      register: package_status
+      until: package_status is success
+      delay: 10
+      retries: 3
+      delegate_to: 127.0.0.1
+      run_once: true
+      when: ansible_distribution != "MacOSX"
+
+    - name: Ensure that 'dopy' dependency is present on controlling host
+      ansible.builtin.pip:
+        name: dopy
+        extra_args: --user
+      environment:
+        PIP_BREAK_SYSTEM_PACKAGES: "1"
+      delegate_to: 127.0.0.1
+      become: false
+      vars:
+        ansible_become: false
+      run_once: true
+
+# SSH key
+- block:
+    # Delete the temporary ssh key from the cloud (if exists)
+    - name: "DigitalOcean: Remove temporary SSH key '{{ ssh_key_name }}' from cloud (if any)"
+      community.digitalocean.digital_ocean_sshkey:
+        oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
+        name: "{{ ssh_key_name }}"
+        ssh_pub_key: "{{ ssh_key_content }}"
+        state: absent
+      when:
+        - ssh_key_name is defined
+        - dblab_tmp_ssh_key_name is defined
+        - ssh_key_name == dblab_tmp_ssh_key_name
+
+    # if ssh_key_name and ssh_key_content is specified, add this ssh key to the cloud
+    - name: "DigitalOcean: Add SSH key '{{ ssh_key_name }}' to cloud"
+      community.digitalocean.digital_ocean_sshkey:
+        oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
+        name: "{{ ssh_key_name }}"
+        ssh_pub_key: "{{ ssh_key_content }}"
+        state: present
+      when:
+        - ssh_key_name | length > 0
+        - ssh_key_content | length > 0
+
+    - name: "DigitalOcean: Gather information about SSH keys"
+      community.digitalocean.digital_ocean_sshkey_info:
+        oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
+      register: ssh_keys
+
+    # if ssh_key_name is specified, get the fingerprint of one ssh key
+    # or if dblab_tmp_ssh_key_name is used and ssh_public_keys is difined
+    - name: "DigitalOcean: Get fingerprint for SSH key '{{ ssh_key_name }}'"
+      ansible.builtin.set_fact:
+        ssh_key_fingerprint: "{{ [item.fingerprint] }}"
+      loop: "{{ ssh_keys.data | lower }}"
+      loop_control:  # do not display the public key
+        label: "{{ item.name }}"
+      when:
+        - ((ssh_key_name | length > 0 and ssh_key_name != dblab_tmp_ssh_key_name) or
+           (ssh_key_name == dblab_tmp_ssh_key_name and ssh_public_keys | default('') | length > 0))
+        - item.name == ssh_key_name | lower
+
+    # Stop, if the ssh key is not found
+    - name: "DigitalOcean: Fail if SSH key '{{ ssh_key_name }}' is not found"
+      ansible.builtin.fail:
+        msg: "SSH key {{ ssh_key_name }} not found. Ensure that key has been added to DigitalOcean."
+      when:
+        - (ssh_key_name | length > 0 and ssh_key_name != dblab_tmp_ssh_key_name)
+        - ssh_key_fingerprint is not defined
+
+    # if ssh_key_name is not specified, and ssh_public_keys is not defined
+    # get the fingerprint of all ssh keys
+    - name: "DigitalOcean: Get Fingerprint for all SSH keys"
+      ansible.builtin.set_fact:
+        ssh_key_fingerprint: "{{ ssh_key_fingerprint | default([]) + [item.fingerprint] }}"
+      loop: "{{ ssh_keys.data | lower }}"
+      loop_control:  # do not display the public key
+        label: "{{ item.name }}"
+      when:
+        - (ssh_key_name | length < 1 or ssh_key_name == dblab_tmp_ssh_key_name)
+        - (ssh_public_keys is not defined or ssh_public_keys | length < 1)
+  when: state == 'present'
+
+# Create (if state or state is present)
+- block:
+    # if server_network is not specified, use default vpc
+    - name: "DigitalOcean: Create or modify Droplet '{{ server_name }}'"
+      community.digitalocean.digital_ocean_droplet:
+        oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
+        state: present
+        name: "{{ server_name }}"
+        unique_name: true
+        size: "{{ server_type }}"
+        region: "{{ server_location }}"
+        image: "{{ server_image }}"
+        ssh_keys: "{{ ssh_key_fingerprint }}"
+        wait_timeout: 500
+        tags:
+          - "dblab"
+          - "{{ server_name | lower }}"
+      register: droplet_result_default_vpc
+      when: server_network is not defined or server_network | length < 1
+
+    # if server_network is specified, get UUID for this vpc
+    - name: "DigitalOcean: Gather information about VPC"
+      community.digitalocean.digital_ocean_vpc_info:
+        oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
+      register: vpc_info
+      when: server_network is defined and server_network | length > 0
+
+    - name: "Fail if no VPC found in the specified region"
+      ansible.builtin.fail:
+        msg: "No VPC found with name '{{ server_network }}' in region '{{ server_location }}'"
+      when:
+        - vpc_info.data is defined
+        - vpc_info.data | selectattr('region', 'equalto', server_location) | selectattr('name', 'equalto', server_network) | list | length == 0
+
+    - name: "Set variable: vpc_id"
+      ansible.builtin.set_fact:
+        vpc_id: "{{ item.id }}"
+      loop: "{{ vpc_info.data }}"
+      loop_control:
+        label: "{{ item.id }}"
+      when:
+        - vpc_info.data is defined
+        - item.region == server_location
+        - item.name == server_network
+
+    - name: "DigitalOcean: Create or modify Droplet '{{ server_name }}' with VPC '{{ server_network }}'"
+      community.digitalocean.digital_ocean_droplet:
+        oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
+        state: present
+        name: "{{ server_name }}"
+        unique_name: true
+        size: "{{ server_type }}"
+        region: "{{ server_location }}"
+        image: "{{ server_image }}"
+        ssh_keys: "{{ ssh_key_fingerprint }}"
+        vpc_uuid: "{{ vpc_id }}"
+        wait_timeout: 500
+        tags:
+          - "dblab"
+          - "{{ server_name | lower }}"
+      register: droplet_result_with_vpc
+      when: server_network is defined and server_network | length > 0
+
+    - name: "Set variable: droplet_result"
+      ansible.builtin.set_fact:
+        droplet_result: "{{ droplet_result_default_vpc
+                            if server_network | default([]) | length < 1
+                            else droplet_result_with_vpc }}"
+      when: droplet_result_default_vpc is defined or
+            droplet_result_with_vpc is defined
+
+    - name: "DigitalOcean: Create or modify Block Storage '{{ server_name }}-storage'"
+      community.digitalocean.digital_ocean_block_storage:
+        oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
+        state: present
+        command: create
+        volume_name: "{{ server_name }}-storage"
+        region: "{{ server_location }}"
+        block_size: "{{ volume_size | int }}"
+      register: block_storage_result
+
+    - name: "DigitalOcean: Attach Block Storage '{{ server_name }}-storage' to Droplet '{{ server_name }}'"
+      community.digitalocean.digital_ocean_block_storage:
+        oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
+        state: present
+        command: attach
+        volume_name: "{{ server_name }}-storage"
+        region: "{{ server_location }}"
+        droplet_id: "{{ droplet_result.data.droplet.id }}"
+      when: droplet_result.data is defined
+  when: state == 'present'
+
+# Info
+- name: Show Droplet info
+  ansible.builtin.debug:
+    msg:
+      - Droplet ID is {{ droplet_result.data.droplet.id }}
+      - Droplet OS is {{ droplet_result.data.droplet.image.description }}
+      - Droplet Name is {{ server_name }}
+      - Droplet Size is {{ server_type }}
+      - Block Storage Size is {{ volume_size }} gigabytes
+      - Public IP is {{ (droplet_result.data.droplet.networks.v4 | selectattr('type', 'equalto', 'public')).0.ip_address }}
+      - Private IP is {{ (droplet_result.data.droplet.networks.v4 | selectattr('type', 'equalto', 'private')).0.ip_address }}
+  when: droplet_result.data is defined
+
+# set_fact: dblab_host
+- name: "Set variable: dblab_host (for deploy DBLab)"
+  ansible.builtin.set_fact:
+    dblab_host: "root@{{ (droplet_result.data.droplet.networks.v4 | selectattr('type', 'equalto', 'public')).0.ip_address }}"
+  when: droplet_result.data is defined
+
+- name: "Wait for the {{ dblab_host }} to be available via ssh"
+  ansible.builtin.wait_for:
+    host: "{{ (droplet_result.data.droplet.networks.v4 | selectattr('type', 'equalto', 'public')).0.ip_address }}"
+    port: 22
+    delay: 5
+    timeout: 300
+  become_user: root
+  when: droplet_result.data is defined
+
+# Delete the temporary SSH key from the cloud after creating the droplet
+- name: "DigitalOcean: Remove temporary SSH key '{{ ssh_key_name }}' from cloud"
+  community.digitalocean.digital_ocean_sshkey:
+    oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
+    name: "{{ ssh_key_name }}"
+    ssh_pub_key: "{{ ssh_key_content }}"
+    state: absent
+  when:
+    - ssh_key_name is defined
+    - dblab_tmp_ssh_key_name is defined
+    - ssh_key_name == dblab_tmp_ssh_key_name
+
+# Delete (if state or state is absent)
+- name: "DigitalOcean: Delete Droplet '{{ server_name }}'"
+  community.digitalocean.digital_ocean_droplet:
+    oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
+    state: absent
+    name: "{{ server_name }}"
+    unique_name: true
+    region: "{{ server_location }}"
+  register: droplet_absent
+  until: not droplet_absent.failed
+  retries: 3
+  delay: 5
+  when: state == 'absent'
+
+- name: "DigitalOcean: Delete Block Storage '{{ server_name }}-storage'"
+  community.digitalocean.digital_ocean_block_storage:
+    oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
+    state: absent
+    command: create
+    volume_name: "{{ server_name }}-storage"
+    region: "{{ server_location }}"
+  register: block_storage_absent
+  until: not block_storage_absent.failed
+  retries: 3
+  delay: 5
+  when: state == 'absent'
+
+...

@@ -1,0 +1,16 @@
+---
+skip_list:
+  - command-instead-of-module # Using command rather than module where necessary
+  - command-instead-of-shell # Using command rather than shell where necessary
+  - ignore-errors # Using 'ignore-errors' is acceptable
+  - key-order[task]
+  - role-name
+  - name[missing]
+  - name[template]
+  - no-changed-when # TODO: define 'changed_when' rules for idempotence
+
+exclude_paths:
+  - ../.config
+  - ../.venv
+  - ../.gitignore
+  - ../.gitlab-ci.yml

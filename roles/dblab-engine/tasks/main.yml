@@ -1,0 +1,76 @@
+---
+- block:
+    - name: Create configuration and logs directories
+      ansible.builtin.file:
+        dest: "{{ dir_item }}"
+        state: directory
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: "0644"
+      loop:
+        - "{{ dblab_engine_config_path }}"
+        - "{{ dblab_engine_meta_path }}"
+        - "{{ dblab_engine_logs_path }}"
+        - "{{ dblab_engine_dump_location }}"
+      loop_control:
+        loop_var: dir_item
+      when: dir_item | default('', true) | length > 0
+      tags: dblab_engine_conf
+
+    # if dblab_engine_preprocess_script is defined, copy the file
+    - name: Copy the preprocessing script file to '{{ dblab_engine_base_path }}/preprocess.sh'
+      ansible.builtin.template:
+        src: "{{ dblab_engine_preprocess_script }}"
+        dest: "{{ dblab_engine_base_path }}/preprocess.sh"
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: "0755"
+      when:
+        - dblab_engine_preprocess_script is defined
+        - dblab_engine_preprocess_script | length > 0
+      tags: dblab_engine_preprocess_script, preprocess_script
+
+    # if dblab_engine_config_file is defined, copy the server.yml file
+    - name: Copy DBLab Engine configuration file to '{{ dblab_engine_config_path }}/server.yml'
+      ansible.builtin.template:
+        src: "{{ dblab_engine_config_file }}"
+        dest: "{{ dblab_engine_config_path }}/server.yml"
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: "0644"
+      notify: "restart dblab_server"
+      when:
+        - dblab_engine_config_file is defined
+        - dblab_engine_config_file | length > 0
+      tags: dblab_engine_conf
+
+    # if dblab_engine_config_file is not defined, generate a new server.yml from the jinja template
+    - name: Generate DBLab Engine configuration file '{{ dblab_engine_config_path }}/server.yml'
+      ansible.builtin.template:
+        src: templates/server.yml.j2
+        dest: "{{ dblab_engine_config_path }}/server.yml"
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: "0644"
+      notify: "restart dblab_server"
+      when: dblab_engine_config_file is not defined or
+            dblab_engine_config_file | length < 1
+      tags: dblab_engine_conf
+
+    - name: Create file 'pending.retrieval'
+      ansible.builtin.file:
+        path: "{{ dblab_engine_meta_path }}/pending.retrieval"
+        state: touch
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: u=rw,g=rw,o=rw
+        modification_time: preserve
+        access_time: preserve
+      when: dblab_engine_config_file is not defined or
+            dblab_engine_config_file | length < 1
+  tags: dle, dblab_engine
+
+- name: Make sure handlers are flushed immediately
+  ansible.builtin.meta: flush_handlers
+
+...

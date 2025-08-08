@@ -1,26 +1,26 @@
 ---
 - block:
-    - name: Copy Netdata plugin for DBLab
-      template:
-        src: templates/netdata_DLE.conf.j2
-        dest: "{{ dle_config_path }}/netdata_DLE.conf"
+    - name: Copy Netdata plugin for DBLab Engine
+      ansible.builtin.template:
+        src: templates/DBLab_Engine.conf.j2
+        dest: "{{ dblab_engine_config_path }}/DBLab_Engine.conf"
         owner: "{{ username }}"
         group: "{{ username }}"
-        mode: 0644
+        mode: "0644"
 
     - name: Start Netdata container
-      docker_container:
+      community.docker.docker_container:
         name: netdata
         network_mode: host
         hostname: "{{ ansible_hostname }}"
-        image: "postgresai/netdata-for-dle:v{{ netdata_version | replace('v', '') }}"
+        image: "{{ netdata_image }}"
         capabilities: sys_ptrace
         security_opts: apparmor:unconfined
         restart_policy: unless-stopped
         container_default_behavior: "compatibility"
         volumes:
           - netdataconfig:/etc/netdata
-          - "{{ dle_config_path }}/netdata_DLE.conf:/etc/netdata/charts.d/DLE.conf"
+          - "{{ dblab_engine_config_path }}/DBLab_Engine.conf:/etc/netdata/charts.d/DBLab_Engine.conf"
           - netdatalib:/var/lib/netdata
           - netdatacache:/var/cache/netdata
           - /proc:/host/proc:ro
@@ -28,7 +28,7 @@
           - /etc/os-release:/host/etc/os-release:ro
 
     - name: Ensure that Netdata is running
-      wait_for:
+      ansible.builtin.wait_for:
         port: "{{ netdata_port }}"
         host: "localhost"
         state: started
