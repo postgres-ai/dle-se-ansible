@@ -3,14 +3,25 @@
 
 # Supabase Runner - https://gitlab.com/postgres-ai/dblab-supabase-runner
 supabase_components: false # Set "true" to configure 'dblab-supabase-runner'
+
+# Temporarily pin the image to the development branch with the new Supabase components.
+# IMPORTANT: This is temporary. After a stable runner release is available,
+#            switch back to a versioned tag:
+#            1) set the desired version, e.g.:   supabase_runner_version: 0.3
+#            2) use the v-tagged image:
+#               supabase_runner_image: "registry.gitlab.com/postgres-ai/dblab-supabase-runner:v{{ supabase_runner_version }}"
+#            Then remove the temporary line below.
+# NOTE: while this temporary image is used, supabase_runner_version is ignored.
 supabase_runner_version: 0.2
-supabase_runner_image: "registry.gitlab.com/postgres-ai/dblab-supabase-runner:v{{ supabase_runner_version }}"
+supabase_runner_image: "registry.gitlab.com/postgres-ai/dblab-supabase-runner:add-supabase-components"  # temporary
 supabase_runner_port: 8080
 supabase_runner_url: "http://dblab_supabase_runner:{{ supabase_runner_port }}"
 supabase_runner_token: "secret-token"
 supabase_runner_network: "dblab_supabase_network"
 supabase_runner_config_path: "{{ dblab_engine_base_path }}/supabase"
 supabase_runner_env_file: "{{ supabase_runner_config_path }}/env"
+# Password used by Supabase components to connect to clones (must match DB user password in clones)
+supabase_db_password: "superpassword"
 # Supabase images
 supabase_rest_image: "postgrest/postgrest:latest"
 supabase_auth_image: "supabase/auth:v2.178.0"

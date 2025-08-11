@@ -47,8 +47,8 @@
     mode: "0600"
     content: |
       SUPABASE_ANON_KEY={{ supabase_anon_key }}
-      SUPABASE_SERVICE_ROLE_KEY={{ supabase_service_role_key }}
-      SUPABASE_JWT_SECRET={{ supabase_jwt_secret }}
+      SUPABASE_SERVICE_KEY={{ supabase_service_role_key }}
+      JWT_SECRET={{ supabase_jwt_secret }}
       # Additional variables can be added here when wiring more services
 
 - name: Run Supabase Runner container
@@ -69,15 +69,16 @@
       DOCKER_API_VERSION: "1.39"
       SECRET_TOKEN: "{{ supabase_runner_token }}"
       NETWORK_NAME: "{{ supabase_runner_network }}"
+      DB_PASSWORD: "{{ supabase_db_password }}"
+      JWT_SECRET: "{{ supabase_jwt_secret }}"
       POSTGREST_IMAGE: "{{ supabase_rest_image }}"
-      AUTH_IMAGE: "{{ supabase_auth_image }}"
+      GOTRUE_IMAGE: "{{ supabase_auth_image }}"
       STUDIO_IMAGE: "{{ supabase_studio_image }}"
       KONG_IMAGE: "{{ supabase_kong_image }}"
       REALTIME_IMAGE: "{{ supabase_realtime_image }}"
       STORAGE_IMAGE: "{{ supabase_storage_image }}"
-      IMGPROXY_IMAGE: "{{ supabase_imgproxy_image }}"
-      META_IMAGE: "{{ supabase_meta_image }}"
-      FUNCTIONS_IMAGE: "{{ supabase_functions_image }}"
+      POSTGRES_META_IMAGE: "{{ supabase_meta_image }}"
+      EDGE_FUNCTIONS_IMAGE: "{{ supabase_functions_image }}"
 
 - name: Wait for Supabase Runner to be ready
   ansible.builtin.wait_for:
