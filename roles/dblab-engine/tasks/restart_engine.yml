@@ -17,7 +17,15 @@
           DOCKER_API_VERSION: "1.39"
           DLE_COMPUTING_INFRASTRUCTURE: "{{ dblab_engine_computing_infrastructure }}"
       vars:
-        docker_container_volumes: "{{ dblab_engine_container_default_volumes + dblab_engine_container_additional_volumes }}"
+        docker_container_volumes: >-
+          {{
+            (
+              (dblab_engine_container_default_volumes + dblab_engine_container_additional_volumes)
+              | reject('equalto', '/var/lib/dblab:/var/lib/dblab/:rshared') | list
+            )
+            if (zpool_mount_dir | regex_replace('/+$','')) == '/var/lib/dblab'
+            else (dblab_engine_container_default_volumes + dblab_engine_container_additional_volumes) | unique
+          }}
 
     - name: Wait for DBLab Engine API port to be available
       ansible.builtin.wait_for:
