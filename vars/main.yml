@@ -52,6 +52,9 @@ dblab_engine_container_additional_volumes: []
 #  - "/etc/wal-g.d/gcs.json:/tmp/sa.json:rshared"
 dblab_engine_start_timeout: 300  # Maximum wait time for DBLab Engine availability after startup.
 
+# Supabase (feature flag default)
+supabase_components: false
+
 # Platform
 platform_project_name: ""  # Project name
 platform_org_key: ""  # Organization key
