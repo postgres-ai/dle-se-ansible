@@ -10,8 +10,8 @@
   tags: dblab, dblab_engine
 
 # add the path to the temporary ssh key if it is used
-- name: Set facts for dle_group
-  hosts: dle_group
+- name: Set facts for dblab_group
+  hosts: dblab_group
   gather_facts: false
   tasks:
     - name: "Set fact: ansible_ssh_private_key_file"
@@ -23,7 +23,7 @@
         - hostvars['localhost']['ssh_key_name'] == 'dle_key_tmp'
 
 - name: Deploy DLE
-  hosts: dle_group
+  hosts: dblab_group
   become: true
   become_method: sudo
   gather_facts: true
