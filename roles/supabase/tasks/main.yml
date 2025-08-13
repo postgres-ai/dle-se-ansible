@@ -57,6 +57,7 @@
     image: "{{ supabase_runner_image }}"
     state: started
     restart_policy: unless-stopped
+    user: root
     ports:
       - "{{ supabase_runner_port }}:8080"
     volumes:
