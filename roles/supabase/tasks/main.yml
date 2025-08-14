@@ -40,10 +40,9 @@
 
 ## Auto-generate Supabase keys if missing, based on supabase_jwt_secret
 - name: Generate Supabase anon key if missing
-  ansible.builtin.command: >-
-    python3 {{ role_path }}/files/gen_jwt.py '{{ supabase_jwt_secret }}' anon
+  ansible.builtin.script: "{{ role_path }}/files/gen_jwt.py {{ supabase_jwt_secret }} anon"
   register: gen_anon_key
-  changed_when: true
+  changed_when: false
   when: supabase_anon_key is not defined or (supabase_anon_key | length == 0)
 
 - name: Set fact supabase_anon_key
@@ -52,10 +51,9 @@
   when: gen_anon_key is defined
 
 - name: Generate Supabase service_role key if missing
-  ansible.builtin.command: >-
-    python3 {{ role_path }}/files/gen_jwt.py '{{ supabase_jwt_secret }}' service_role
+  ansible.builtin.script: "{{ role_path }}/files/gen_jwt.py {{ supabase_jwt_secret }} service_role"
   register: gen_service_key
-  changed_when: true
+  changed_when: false
   when: supabase_service_role_key is not defined or (supabase_service_role_key | length == 0)
 
 - name: Set fact supabase_service_role_key
