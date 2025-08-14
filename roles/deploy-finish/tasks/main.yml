@@ -4,9 +4,6 @@
 - name: Make sure handlers are flushed immediately
   ansible.builtin.meta: flush_handlers
 
-- name: Make sure handlers are flushed immediately
-  ansible.builtin.meta: flush_handlers
-
 - name: Remove temporary SSH public key from server
   ansible.posix.authorized_key:
     user: "{{ system_user.stdout }}"
