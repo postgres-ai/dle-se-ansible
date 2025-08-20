@@ -4,7 +4,7 @@
 # Supabase Runner - https://gitlab.com/postgres-ai/dblab-supabase-runner
 supabase_components: false # Set "true" to configure 'dblab-supabase-runner'
 
-supabase_runner_version: 0.3
+supabase_runner_version: 0.4
 supabase_runner_image: "registry.gitlab.com/postgres-ai/dblab-supabase-runner:v{{ supabase_runner_version }}"
 supabase_runner_port: 8080
 supabase_runner_url: "http://dblab_supabase_runner:{{ supabase_runner_port }}"
