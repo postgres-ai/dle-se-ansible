@@ -26,7 +26,7 @@ python-venv-init: ## Create venv ".venv/" if not exist
 .PHONY: python-venv-upgrade
 python-venv-upgrade: ## Upgrade venv with pip, setuptools and wheel
 	@echo "Upgrading virtual environment..."
-	@source .venv/bin/activate && pip install --upgrade pip setuptools wheel
+	@source .venv/bin/activate && pip install --upgrade pip "setuptools>=68.0.0,<81" wheel
 
 .PHONY: python-venv-requirements
 python-venv-requirements: ## Install or upgrade from $(python_requirements_file)

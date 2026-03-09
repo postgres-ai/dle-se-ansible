@@ -29,6 +29,7 @@ ansible-lint:
 molecule-test:
   stage: test
   script:
+    - docker build -t postgresai/docker-dind-systemd-ubuntu:22.04 molecule/docker/
     - make bootstrap-dev
     - make molecule-test
   allow_failure: true  # allow build image even if the test failed
