@@ -14,7 +14,9 @@ The HowTo guide can be found here: [How to install DBLab Engine using the Postgr
   - Data storage disk (which is larger than the size of the database)
 - For deployment in one of the supported clouds:
   - AWS: [Access key ID and secret](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html). Before performing automation, these values must be exported to the `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` variables, respectively.
-  - GCP: [Service account](https://developers.google.com/identity/protocols/oauth2/service-account#creatinganaccount). Before performing automation, the contents of the service account JSON file must be exported to the `GCP_SERVICE_ACCOUNT_CONTENTS` variable.
+  - GCP: [Service account](https://developers.google.com/identity/protocols/oauth2/service-account#creatinganaccount). Before performing automation, the contents of the service account JSON file must be exported to the `GCP_SERVICE_ACCOUNT_CONTENTS` variable. The service account requires the following IAM permissions:
+    - `compute.instances.*`, `compute.disks.*` — instance and disk management
+    - `compute.firewalls.create`, `compute.firewalls.update`, `compute.networks.updatePolicy` — needed to create an SSH access firewall rule for DBLab instances
   - Digital Ocean: [Personal Access Token](https://docs.digitalocean.com/reference/api/create-personal-access-token/). Before performing automation, this token must be exported to the `DO_API_TOKEN` variable.
   - Hetzner Cloud: [API Token](https://docs.hetzner.com/cloud/api/getting-started/generating-api-token/). Before performing automation, this token must be exported to the `HCLOUD_API_TOKEN` variable.
 - [Ansible](https://docs.ansible.com/ansible/latest/installation_guide/intro_installation.html) version 2.11.0 and higher, or a [Docker](https://docs.docker.com/engine/install/) on the computer from which the automation is performed.
