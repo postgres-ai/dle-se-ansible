@@ -162,7 +162,9 @@
           ansible.builtin.fail:
             msg: >-
               GCP resource creation failed (task: {{ ansible_failed_task.name | default('unknown') }}).
-              Disk cleanup: {{ 'succeeded' if (gcp_disk_cleanup_result is defined and not gcp_disk_cleanup_result.failed | default(false)) else 'skipped or failed — check for orphaned disk' }}.
+              Disk cleanup: {{ 'succeeded'
+              if (gcp_disk_cleanup_result is defined and not gcp_disk_cleanup_result.failed | default(false))
+              else 'skipped or failed — check for orphaned disk' }}.
               Error: {{ ansible_failed_result.msg | default('unknown error') }}
   when: state == 'present'
 

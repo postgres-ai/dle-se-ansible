@@ -20,6 +20,9 @@ yamllint:
   script:
     - make bootstrap-dev
     - make linter-yamllint
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_BRANCH
   tags:
     - dle-test
 
@@ -28,6 +31,9 @@ ansible-lint:
   script:
     - make bootstrap-dev
     - make linter-ansible-lint
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_BRANCH
   tags:
     - dle-test
 
