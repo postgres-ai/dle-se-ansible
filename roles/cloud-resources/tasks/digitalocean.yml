@@ -104,9 +104,7 @@
         image: "{{ server_image }}"
         ssh_keys: "{{ ssh_key_fingerprint }}"
         wait_timeout: 500
-        tags:
-          - "dblab"
-          - "{{ server_name | lower }}"
+        tags: "{{ ['dblab', server_name | lower] | unique }}"  # unique deduplicates in case server_name matches any existing tag
       register: droplet_result_default_vpc
       when: server_network is not defined or server_network | length < 1
 
@@ -147,9 +145,7 @@
         ssh_keys: "{{ ssh_key_fingerprint }}"
         vpc_uuid: "{{ vpc_id }}"
         wait_timeout: 500
-        tags:
-          - "dblab"
-          - "{{ server_name | lower }}"
+        tags: "{{ ['dblab', server_name | lower] | unique }}"  # unique deduplicates in case server_name matches any existing tag
       register: droplet_result_with_vpc
       when: server_network is defined and server_network | length > 0
 

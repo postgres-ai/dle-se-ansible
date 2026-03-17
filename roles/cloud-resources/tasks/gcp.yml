@@ -74,62 +74,96 @@
       ansible.builtin.set_fact:
         gcp_network_name: "{{ server_network if server_network is defined and server_network | length > 0 else 'default' }}"
 
-    - name: "GCP: Create or modify disk '{{ server_name }}-storage'"
-      google.cloud.gcp_compute_disk:
-        auth_kind: serviceaccount
-        service_account_contents: "{{ gcp_service_account_contents }}"
-        project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
-        zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"  # add "-b" if the zone is not defined
-        name: "{{ server_name }}-storage"
-        size_gb: "{{ volume_size | int }}"
-        state: present
-        labels:
-          env: dblab
-          server: "{{ server_name | lower }}"
+    # block/rescue: create the disk first, then the instance.
+    # If the instance creation fails, the rescue block attempts to delete the
+    # orphaned disk so the next run can start clean.  The final 'fail' task
+    # re-raises the original error so the play still ends in failure.
+    - name: "GCP: Create or modify disk and instance for '{{ server_name }}'"
+      block:
+        - name: "GCP: Create or modify disk '{{ server_name }}-storage'"
+          google.cloud.gcp_compute_disk:
+            auth_kind: serviceaccount
+            service_account_contents: "{{ gcp_service_account_contents }}"
+            project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
+            zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"  # add "-b" if the zone is not defined
+            name: "{{ server_name }}-storage"
+            size_gb: "{{ volume_size | int }}"
+            state: present
+            labels:
+              env: dblab
+              server: "{{ server_name | lower }}"
+          register: gcp_disk_result
 
-    - name: "GCP: Create or modify instance '{{ server_name }}'"
-      google.cloud.gcp_compute_instance:
-        auth_kind: serviceaccount
-        service_account_contents: "{{ gcp_service_account_contents }}"
-        project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
-        zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"  # add "-b" if the zone is not defined
-        name: "{{ server_name | lower }}"
-        machine_type: "{{ server_type }}"
-        disks:
-          - device_name: "{{ server_name }}-system"
-            auto_delete: true
-            boot: true
-            type: "{{ volume_type | default('pd-standard') }}"
-            initialize_params:
-              disk_name: "{{ server_name }}-system"
-              source_image: "{{ server_image }}"
-              disk_size_gb: "{{ system_volume_size }}"  # system disk size
-          - device_name: "{{ server_name }}-storage"
-            auto_delete: true
-            type: "{{ volume_type | default('pd-ssd') }}"
-            initialize_params:
-              disk_name: "{{ server_name }}-storage"
-              disk_size_gb: "{{ volume_size | int }}"
-        network_interfaces:
-          - network:
-              selfLink: "projects/{{ gcp_project | default(project_info.resources[0].projectNumber) }}/global/networks/{{ gcp_network_name }}"
-            access_configs:
-              - name: External NAT
-                type: ONE_TO_ONE_NAT
-        scheduling:
-          preemptible: "{{ gcp_compute_instance_preemptible | default(false) | bool }}"
-        labels:
-          env: dblab
-          server: "{{ server_name | lower }}"
-        tags:
-          items:
-            - "dblab"
-            - "{{ server_name | lower }}"
-        metadata:
-          ssh-keys: "root:{{ ssh_key_content }}"
-        status: "{{ instance.status | default(omit) }}"
-        state: present
-      register: server_result
+        - name: "GCP: Create or modify instance '{{ server_name }}'"
+          google.cloud.gcp_compute_instance:
+            auth_kind: serviceaccount
+            service_account_contents: "{{ gcp_service_account_contents }}"
+            project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
+            zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"  # add "-b" if the zone is not defined
+            name: "{{ server_name | lower }}"
+            machine_type: "{{ server_type }}"
+            disks:
+              - device_name: "{{ server_name }}-system"
+                auto_delete: true
+                boot: true
+                type: "{{ volume_type | default('pd-standard') }}"
+                initialize_params:
+                  disk_name: "{{ server_name }}-system"
+                  source_image: "{{ server_image }}"
+                  disk_size_gb: "{{ system_volume_size }}"  # system disk size
+              - device_name: "{{ server_name }}-storage"
+                auto_delete: true
+                type: "{{ volume_type | default('pd-ssd') }}"
+                initialize_params:
+                  disk_name: "{{ server_name }}-storage"
+                  disk_size_gb: "{{ volume_size | int }}"
+            network_interfaces:
+              - network:
+                  selfLink: "projects/{{ gcp_project | default(project_info.resources[0].projectNumber) }}/global/networks/{{ gcp_network_name }}"
+                access_configs:
+                  - name: External NAT
+                    type: ONE_TO_ONE_NAT
+            scheduling:
+              preemptible: "{{ gcp_compute_instance_preemptible | default(false) | bool }}"
+            labels:
+              env: dblab
+              server: "{{ server_name | lower }}"
+            tags:
+              items: "{{ ['dblab', server_name | lower] | unique }}"  # unique deduplicates in case server_name matches any existing tag
+            metadata:
+              ssh-keys: "root:{{ ssh_key_content }}"
+            status: "{{ instance.status | default(omit) }}"
+            state: present
+          register: server_result
+      rescue:
+        # Rescue runs whenever any task in the block above fails.
+        # CLEANUP: Delete the storage disk if the disk task ran (gcp_disk_result
+        # is defined).  This covers two scenarios:
+        #   1. First run: disk was just created (changed=true) — clean up.
+        #   2. Re-run after prior failure: disk exists from the earlier failed
+        #      attempt (changed=false) — still an orphan, clean up.
+        # The instance never booted successfully in either case, so the disk
+        # cannot contain production data.
+        # Use failed_when: false so a cleanup failure doesn't mask the original
+        # error (the 'fail' task below surfaces both outcomes).
+        - name: "GCP: Clean up disk '{{ server_name }}-storage' after failed resource creation"
+          google.cloud.gcp_compute_disk:
+            auth_kind: serviceaccount
+            service_account_contents: "{{ gcp_service_account_contents }}"
+            project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
+            zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"
+            name: "{{ server_name }}-storage"
+            state: absent
+          register: gcp_disk_cleanup_result
+          failed_when: false  # best-effort — if this fails, disk must be deleted manually from GCP console
+          when: gcp_disk_result is defined
+
+        - name: "GCP: Fail after cleanup"
+          ansible.builtin.fail:
+            msg: >-
+              GCP resource creation failed (task: {{ ansible_failed_task.name | default('unknown') }}).
+              Disk cleanup: {{ 'succeeded' if (gcp_disk_cleanup_result is defined and not gcp_disk_cleanup_result.failed | default(false)) else 'skipped or failed — check for orphaned disk' }}.
+              Error: {{ ansible_failed_result.msg | default('unknown error') }}
   when: state == 'present'
 
 # Firewall rule for SSH access (shared across all DBLab instances)
