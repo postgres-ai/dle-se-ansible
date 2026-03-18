@@ -109,6 +109,29 @@
         - server_network | length < 1
         - vpc_subnet_info.subnets[0].id is defined
 
+    # Fail early if an instance with this name already exists.
+    - name: "AWS: Check if instance '{{ server_name }}' already exists"
+      amazon.aws.ec2_instance_info:
+        access_key: "{{ lookup('ansible.builtin.env', 'AWS_ACCESS_KEY_ID') }}"
+        secret_key: "{{ lookup('ansible.builtin.env', 'AWS_SECRET_ACCESS_KEY') }}"
+        region: "{{ server_location }}"
+        filters:
+          "tag:Name": "{{ server_name | lower }}"
+          "instance-state-name":
+            - running
+            - stopped
+      register: existing_instance_check
+
+    - name: "AWS: Fail if instance '{{ server_name }}' already exists"
+      ansible.builtin.fail:
+        msg: >-
+          An EC2 instance named '{{ server_name }}' already exists
+          (IP: {{ existing_instance_check.instances[0].public_ip_address | default('N/A') }},
+          ID: {{ existing_instance_check.instances[0].instance_id | default('N/A') }}).
+          Please choose a different server name or terminate the existing instance
+          from the AWS console before retrying.
+      when: existing_instance_check.instances | length > 0
+
     # Security Group
     - name: "AWS: Create DBLab Security Group"
       amazon.aws.ec2_security_group:
@@ -186,7 +209,7 @@
     dblab_host: "ubuntu@{{ ec2_result.instances[0].public_ip_address }}"
   when: ec2_result.instances is defined
 
-- name: "Wait for host '{{ dblab_host }}' to be available via SSH"
+- name: "Wait for SSH port on '{{ dblab_host }}'"
   ansible.builtin.wait_for:
     host: "{{ ec2_result.instances[0].public_ip_address }}"
     port: 22
@@ -194,6 +217,23 @@
     timeout: 300
   become_user: ubuntu
   when: ec2_result.instances is defined
+
+# The port check succeeds as soon as sshd starts, but cloud-init may not have
+# written the SSH key to authorized_keys yet. Retry actual SSH authentication.
+- name: "Verify SSH authentication to '{{ dblab_host }}'"
+  ansible.builtin.command:
+    cmd: >-
+      ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes
+      -i ~/.ssh/{{ dblab_tmp_ssh_key_name }}
+      {{ dblab_host }} true
+  register: ssh_auth_check
+  retries: 15
+  delay: 5
+  until: ssh_auth_check.rc == 0
+  changed_when: false
+  when:
+    - ec2_result.instances is defined
+    - dblab_tmp_ssh_key_name is defined
 
 # Delete the temporary ssh key from the cloud after creating the EC2 instance
 - name: "AWS: Remove temporary SSH key '{{ ssh_key_name }}' from cloud"
