@@ -90,6 +90,28 @@
         - (ssh_public_keys is not defined or ssh_public_keys | length < 1)
   when: state == 'present'
 
+# Fail early if a droplet with this name already exists.
+- name: "DigitalOcean: Check if Droplet '{{ server_name }}' already exists"
+  community.digitalocean.digital_ocean_droplet_info:
+    oauth_token: "{{ lookup('ansible.builtin.env', 'DO_API_TOKEN') }}"
+  register: existing_droplets_check
+  when: state == 'present'
+
+- name: "DigitalOcean: Fail if Droplet '{{ server_name }}' already exists"
+  ansible.builtin.fail:
+    msg: >-
+      A Droplet named '{{ server_name }}' already exists
+      (IP: {{ item.networks.v4 | selectattr('type', 'equalto', 'public') | map(attribute='ip_address') | first | default('N/A') }}).
+      Please choose a different server name or delete the existing Droplet
+      from the DigitalOcean console before retrying.
+  loop: "{{ existing_droplets_check.data | default([]) }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - state == 'present'
+    - item.name | lower == server_name | lower
+    - item.status in ['active', 'off']
+
 # Create (if state or state is present)
 - block:
     # if server_network is not specified, use default vpc
@@ -197,7 +219,7 @@
     dblab_host: "root@{{ (droplet_result.data.droplet.networks.v4 | selectattr('type', 'equalto', 'public')).0.ip_address }}"
   when: droplet_result.data is defined
 
-- name: "Wait for the {{ dblab_host }} to be available via ssh"
+- name: "Wait for SSH port on '{{ dblab_host }}'"
   ansible.builtin.wait_for:
     host: "{{ (droplet_result.data.droplet.networks.v4 | selectattr('type', 'equalto', 'public')).0.ip_address }}"
     port: 22
@@ -205,6 +227,23 @@
     timeout: 300
   become_user: root
   when: droplet_result.data is defined
+
+# The port check succeeds as soon as sshd starts, but cloud-init may not have
+# written the SSH key to authorized_keys yet. Retry actual SSH authentication.
+- name: "Verify SSH authentication to '{{ dblab_host }}'"
+  ansible.builtin.command:
+    cmd: >-
+      ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 -o BatchMode=yes
+      -i ~/.ssh/{{ dblab_tmp_ssh_key_name }}
+      {{ dblab_host }} true
+  register: ssh_auth_check
+  retries: 15
+  delay: 5
+  until: ssh_auth_check.rc == 0
+  changed_when: false
+  when:
+    - droplet_result.data is defined
+    - dblab_tmp_ssh_key_name is defined
 
 # Delete the temporary SSH key from the cloud after creating the droplet
 - name: "DigitalOcean: Remove temporary SSH key '{{ ssh_key_name }}' from cloud"
