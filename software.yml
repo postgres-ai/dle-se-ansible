@@ -102,6 +102,20 @@
       retries: 3
       when: ansible_os_family == "Debian"
 
+    # Reads back the Platform access token this server already holds, before any
+    # role renders a configuration file with it. Play-level because both the
+    # engine config and the agent config are rendered from it, and the engine
+    # config is rendered first. 'always' so that a '--tags dblab-agent' switch
+    # of an already-installed server sees it too.
+    - name: Read the DBLab agent's stored Platform access token
+      ansible.builtin.include_role:
+        name: dblab-agent
+        tasks_from: read_token.yml
+        apply:
+          tags: always  # without this the included tasks are filtered out by --tags
+      when: dblab_agent_install | bool
+      tags: always
+
     - name: Ensure 'set backupcopy=yes' is in ~/.vimrc
       ansible.builtin.lineinfile:
         path: "~{{ username }}/.vimrc"
@@ -121,6 +135,11 @@
     # Configure and start DBLab Engine
     - role: dblab-engine
     - role: dblab-cli
+
+    # DBLab agent (inverted mode: the DBLab server calls the Platform)
+    - role: dblab-agent
+      when: dblab_agent_install | bool
+      tags: dblab-agent
 
     # Joe Bot
     - role: joe-bot

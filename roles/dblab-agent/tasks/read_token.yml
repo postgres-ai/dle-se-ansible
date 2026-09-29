@@ -1,0 +1,33 @@
+---
+
+# Reads back the token this box already holds, before anything renders a config
+# from it. The mint is first-registration-only, so the agent's own config is the
+# only place it survives. An absent or tokenless file yields an empty string,
+# never an undefined variable: a re-run must not write a null over a working
+# config.
+
+- name: Check whether the DBLab agent configuration already exists
+  ansible.builtin.stat:
+    path: "{{ dblab_agent_config_path }}/.pgwatch-config"
+  register: dblab_agent_config_stat
+
+- name: Read the stored DBLab agent configuration
+  ansible.builtin.slurp:
+    src: "{{ dblab_agent_config_path }}/.pgwatch-config"
+  register: dblab_agent_config_slurp
+  no_log: true  # the file holds the Platform access token
+  when: dblab_agent_config_stat.stat.exists
+
+# Matches the agent's own parser (instance-jobs/internal/config/config.go):
+# unindented 'key=value', the FIRST occurrence wins, the value is trimmed. A
+# line the agent would ignore must be ignored here too, or the two readers
+# disagree about which line is the credential.
+- name: "Set variable: dblab_agent_platform_token (from the stored configuration)"
+  ansible.builtin.set_fact:
+    dblab_agent_platform_token: "{{ (_dblab_agent_stored_tokens | first | trim) if (_dblab_agent_stored_tokens | length > 0) else '' }}"
+  vars:
+    _dblab_agent_stored_content: "{{ (dblab_agent_config_slurp.content | default('')) | b64decode }}"
+    _dblab_agent_stored_tokens: "{{ _dblab_agent_stored_content | regex_findall('(?m)^dblab_token=([^\\r\\n]*)') }}"
+  no_log: true
+
+...

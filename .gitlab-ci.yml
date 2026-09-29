@@ -37,6 +37,17 @@ ansible-lint:
   tags:
     - dle-test
 
+dblab-agent-tests:
+  stage: test
+  script:
+    - make bootstrap
+    - make test-dblab-agent
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_BRANCH
+  tags:
+    - dle-test
+
 molecule-test:
   stage: test
   script:

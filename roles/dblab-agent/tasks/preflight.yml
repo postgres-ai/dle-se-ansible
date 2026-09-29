@@ -1,0 +1,64 @@
+---
+
+# The agent refuses an address it cannot verify, says so once on its first call
+# and then goes quiet. Both refusals are decidable before the engine is touched,
+# so they are checked here. Mirrors 'baseURLProblem' in the agent's config.go.
+
+- name: "Set variable: _dblab_agent_url_parts"
+  ansible.builtin.set_fact:
+    _dblab_agent_url_scheme: "{{ dblab_agent_api_base_url | urlsplit('scheme') }}"
+    _dblab_agent_url_host: "{{ dblab_agent_api_base_url | urlsplit('hostname') | default('', true) }}"
+
+- name: Ensure the Platform address is a URL the agent can use
+  ansible.builtin.assert:
+    that:
+      - _dblab_agent_url_host | length > 0
+      - _dblab_agent_url_scheme in ['http', 'https']
+    fail_msg: >-
+      platform_url ('{{ dblab_agent_api_base_url }}') is not an http(s) address with a host.
+      The agent reports this as 'api_base_url is not a url' and then idles.
+    quiet: true
+
+# Loopback http is how a local rig runs, and is the only http the agent accepts:
+# the access token travels as a request header. The host has to BE loopback, not
+# merely start with it: 'match' anchors only at the start, so an unterminated
+# alternative would accept 'localhost.example.com' and send the token in
+# cleartext to a host someone else owns.
+- name: Ensure the Platform address is https unless the Platform is on this server
+  ansible.builtin.assert:
+    that:
+      - _dblab_agent_url_scheme == 'https' or
+        _dblab_agent_url_host is match('^(localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|::1)$')
+    fail_msg: >-
+      platform_url ('{{ dblab_agent_api_base_url }}') is plain http against '{{ _dblab_agent_url_host }}'.
+      The DBLab server sends its access token to the Platform as a request header, so http is
+      accepted only when the Platform runs on this server itself (127.0.0.1, ::1 or localhost).
+      Use an https address.
+    quiet: true
+
+# Not fatal: a certificate may legitimately carry an IP SAN, and refusing to
+# install would be this playbook overruling a setup that works. Proven on the
+# rig: the agent refused 'https://127.0.0.1:8443' with
+# "x509: ... doesn't contain any IP SANs" and worked once addressed by the name
+# on the certificate with the CA supplied.
+- name: Warn when the Platform is addressed by IP over https
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: platform_url ('{{ dblab_agent_api_base_url }}') addresses the Platform by IP address.
+      The agent will refuse the certificate unless that certificate lists the IP address itself
+      ("x509: ... doesn't contain any IP SANs"). Address the Platform by the name on its
+      certificate instead, and put the certificate authority file on this server.
+  when:
+    - _dblab_agent_url_scheme == 'https'
+    - _dblab_agent_url_host is match('^\d{1,3}(\.\d{1,3}){3}$') or ':' in _dblab_agent_url_host
+
+- name: Ensure the DBLab Engine verification token is set
+  ansible.builtin.assert:
+    that:
+      - dblab_engine_verification_token | default('', true) | length > 0
+    fail_msg: >-
+      dblab_engine_verification_token is empty. The agent presents it to the engine on every call
+      and reports 'dblab_verify_token missing' without it.
+    quiet: true
+
+...

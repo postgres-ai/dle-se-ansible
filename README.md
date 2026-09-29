@@ -86,6 +86,32 @@ Note: if 'ssh_key_name' is not specified, with each new execution of the playboo
 |:---------|:------------|:-------------:|
 | `platform_project_name` (required) | Platform Project name. | "" |
 | `platform_org_key` (required) | Platform Organization key. | "" |
+| `platform_url` (optional) | Platform API URL. Keep it default to work with Postgres.ai SaaS. | `https://postgres.ai/api/general` |
+
+#### DBLab agent (the DBLab server calls Postgres.ai):
+
+By default the DBLab server waits to be called: Postgres.ai connects to it, so it needs an address Postgres.ai can reach and an open port. Set `dblab_agent_install` to `true` to install a small agent beside the engine instead. The agent registers the server with Postgres.ai, stores the access token it is given and from then on asks Postgres.ai for work — nothing connects to the server, so it needs no public address and no open port.
+
+| Variable | Description | Default value |
+|:---------|:------------|:-------------:|
+| `dblab_agent_install` (optional) | Install the agent that makes this server call Postgres.ai. | `false` |
+| `dblab_agent_version` (optional) | The agent version. No released image carries the DBLab channel yet, so set this to a build that does. | `0.17.0-rc.4` |
+| `dblab_agent_image` (optional) | The agent container image. | `postgresai/instance-jobs:{{ dblab_agent_version \| replace('v', '') }}` |
+| `dblab_agent_container_name` (optional) | The agent container name. | `dblab_agent` |
+| `dblab_agent_config_path` (optional) | The directory holding the agent's `.pgwatch-config` file. | `{{ dblab_engine_base_path }}/agent` |
+| `dblab_agent_uid` `dblab_agent_gid` (optional) | The user the agent container runs as, and the owner of its configuration file. The image's own unprivileged user. | `1001`, `1001` |
+| `dblab_agent_cpus` (optional) | CPU limit for the agent container. | `0.25` |
+| `dblab_agent_memory` (optional) | Memory limit for the agent container. | `256M` |
+| `dblab_agent_dblab_url` (optional) | The DBLab Engine address the agent calls. Both run on this server, so this is loopback. | `http://{{ dblab_engine_container_host }}:{{ dblab_engine_port }}` |
+| `dblab_agent_api_base_url` (optional) | The Postgres.ai address the agent registers with and polls. | `{{ platform_url }}` |
+| `dblab_agent_set_engine_token` (optional) | Also write the access token into the engine's `platform.accessToken`. Leave it off for now: Postgres.ai does not yet accept an instance-scoped token at `v1.dblab_token_check`, and the engine refuses to start on a token that check rejects. | `false` |
+
+Notes:
+
+- `platform_url` must be `https`, or `http` to a loopback address for a local rig: the access token travels as a request header. The playbook refuses to continue otherwise.
+- A certificate rarely carries an IP address, so address Postgres.ai by the name on its certificate and put the certificate authority file on the server. The playbook warns about an https address that is an IP; it does not refuse one.
+- The access token is minted on **first** registration only. Running the install again is safe: a server that already has access keeps it, and the playbook says so. To replace it, an organization admin has to revoke the server's access first.
+- One server serves one thing. Do not add a monitoring instance's `instance_id` to the agent's configuration file on a DBLab server.
 
 #### DBLab CLI:
 
@@ -231,6 +257,25 @@ docker run --rm -it \
 ```
 
 Note: After you've set up your proxy server for clone access, you will need to specify the port by adding `+3000` to it in your connection string. For instance, if your regular connection port is `6000`, you should use port `9000` for accessing your clone. This adjustment is necessary to ensure proper network connectivity via proxy server.
+
+#### Switch a DBLab server that is already installed to call Postgres.ai:
+
+You do not have to reinstall it. Run the same playbook with the `dblab-agent` tag against that server: it leaves the engine alone, installs the agent and starts it. Fill in the project name and the verification token that server already uses.
+
+```bash
+docker run --rm -it \
+  -v $HOME/.ssh:/root/.ssh:ro \
+  -e ANSIBLE_SSH_ARGS="-F none" \
+  postgresai/dle-se-ansible:v1.1 \
+    ansible-playbook deploy_dle.yml --tags dblab-agent --extra-vars \
+      "dblab_host='root@12.34.56.78' \
+      dblab_agent_install='true' \
+      platform_org_key='***********' \
+      platform_project_name='dblab-server' \
+      dblab_engine_verification_token='existing-verification-token'"
+```
+
+The engine is neither reinstalled nor restarted; its configuration is left alone unless you also set `dblab_agent_set_engine_token`, and then it is reloaded with a `SIGHUP` rather than restarted. The switch takes effect when the agent makes its first call, so you can watch it happen. To undo it, stop the agent container and have an organization admin revoke the server's access; Postgres.ai goes back to connecting to the server on its own.
 
 #### Configure a dblab server after deployment:
 
