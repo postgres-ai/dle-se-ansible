@@ -1,0 +1,479 @@
+---
+
+# Tests for the 'dblab-agent' role's decision logic. Run from the repository root:
+#
+#   ansible-playbook tests/dblab-agent/test.yml
+#
+# Everything here runs on localhost and touches nothing but a temporary
+# directory. The three task files under test read registered variables and
+# files, so they can be driven directly with stubs.
+#
+# Each expected failure asserts the TEXT of the message it expects, not merely
+# that something failed: a test that only checks "it failed" passes for the
+# wrong branch, and every branch here fails.
+
+- name: "DBLab agent | registration outcomes"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    dblab_agent_tasks: "{{ playbook_dir }}/../../roles/dblab-agent/tasks"
+    dblab_agent_api_base_url: "https://example.test/api/general"
+    dblab_agent_config_path: "/tmp/dblab-agent-test"
+    dblab_agent_instance_id: "cs0abcdefghijklmnopq"
+    platform_project_name: "test-project"
+    registration_cases:
+      - name: "minted: the reply's token is taken"
+        reply:
+          status: 200
+          json:
+            platform_access_token: "minted-token-abc"
+            platform_access_token_status: "minted"
+        stored_token: ""
+        expect_token: "minted-token-abc"
+
+      - name: "existing: the token already on the box is kept"
+        reply:
+          status: 200
+          json:
+            platform_access_token: null
+            platform_access_token_status: "existing"
+        stored_token: "token-already-here"
+        expect_token: "token-already-here"
+
+      - name: "existing with nothing stored: an admin must revoke first"
+        reply:
+          status: 200
+          json:
+            platform_access_token: null
+            platform_access_token_status: "existing"
+        stored_token: ""
+        expect_failure: "revoke the existing token"
+
+      - name: "no_owner: names the organization's project"
+        reply:
+          status: 200
+          json:
+            platform_access_token: null
+            platform_access_token_status: "no_owner"
+        stored_token: ""
+        expect_failure: "has no owner to attribute the token to"
+
+      - name: "not_requested: impossible, so it is loud"
+        reply:
+          status: 200
+          json:
+            platform_access_token: null
+            platform_access_token_status: "not_requested"
+        stored_token: ""
+        expect_failure: "dropped it from the request body"
+
+      - name: "PGRST202: the Platform predates platform-all#812"
+        reply:
+          status: 404
+          json:
+            code: "PGRST202"
+            message: "Could not find the function"
+        stored_token: ""
+        expect_failure: "predates platform-all#812"
+
+      - name: "404 without a code is still the un-migrated Platform"
+        reply:
+          status: 404
+          json: { }
+        stored_token: ""
+        expect_failure: "predates platform-all#812"
+
+      - name: "any other refusal is reported as a refusal"
+        reply:
+          status: 400
+          json:
+            message: "Bad Request"
+            details: "Cannot find org using org_key (header Org-Key)."
+        stored_token: ""
+        expect_failure: "Cannot find org using org_key"
+
+      - name: "an unknown status is never acted on"
+        reply:
+          status: 200
+          json:
+            platform_access_token: null
+            platform_access_token_status: "rotated"
+        stored_token: ""
+        expect_failure: "does not know how to act on"
+
+      - name: "minted with no token is not treated as success"
+        reply:
+          status: 200
+          json:
+            platform_access_token: null
+            platform_access_token_status: "minted"
+        stored_token: ""
+        expect_failure: "no usable token is available"
+
+  tasks:
+    - name: "Case: {{ case.name }}"
+      ansible.builtin.include_tasks: run_registration_case.yml
+      loop: "{{ registration_cases }}"
+      loop_control:
+        loop_var: case
+        label: "{{ case.name }}"
+
+- name: "DBLab agent | reading the token already stored on the box"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    dblab_agent_tasks: "{{ playbook_dir }}/../../roles/dblab-agent/tasks"
+    dblab_agent_config_path: "/tmp/dblab-agent-test/stored"
+    stored_token_cases:
+      - name: "a file the role wrote"
+        content: |
+          # DBLab agent settings.
+          dblab_token=plain-token
+          dblab_verify_token=verify
+          dblab_url=http://127.0.0.1:2345
+        expect: "plain-token"
+
+      - name: "CRLF line endings"
+        content: "dblab_token=crlf-token\r\ndblab_verify_token=verify\r\n"
+        expect: "crlf-token"
+
+      - name: "a duplicate key: the first wins, as the agent's parser does"
+        content: |
+          dblab_token=first-token
+          dblab_token=second-token
+        expect: "first-token"
+
+      - name: "an indented key is not the credential, as the agent's parser has it"
+        content: |
+          # note the leading space
+           dblab_token=indented
+          dblab_token=real-token
+        expect: "real-token"
+
+      - name: "a commented-out token is not a token"
+        content: |
+          #dblab_token=commented
+          dblab_verify_token=verify
+        expect: ""
+
+      - name: "a file with no token at all"
+        content: |
+          api_base_url=https://example.test/api/general
+        expect: ""
+
+      - name: "surrounding whitespace is trimmed, as the agent's parser does"
+        content: "dblab_token=   spaced-token   \n"
+        expect: "spaced-token"
+
+  tasks:
+    - name: Create the fixture directory
+      ansible.builtin.file:
+        path: "{{ dblab_agent_config_path }}"
+        state: directory
+        mode: "0700"
+
+    - name: "Case: {{ case.name }}"
+      ansible.builtin.include_tasks: run_stored_token_case.yml
+      loop: "{{ stored_token_cases }}"
+      loop_control:
+        loop_var: case
+        label: "{{ case.name }}"
+
+    - name: Remove the stored configuration
+      ansible.builtin.file:
+        path: "{{ dblab_agent_config_path }}/.pgwatch-config"
+        state: absent
+
+    - name: An absent configuration reads as no token, not as an error
+      ansible.builtin.include_tasks: "{{ dblab_agent_tasks }}/read_token.yml"
+
+    - name: Assert that an absent configuration yields an empty token
+      ansible.builtin.assert:
+        that:
+          - dblab_agent_platform_token == ''
+        quiet: true
+
+- name: "DBLab agent | the Platform address preflight"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    dblab_agent_tasks: "{{ playbook_dir }}/../../roles/dblab-agent/tasks"
+    dblab_engine_verification_token: "some-secret-token"
+    preflight_cases:
+      - name: "the production address"
+        url: "https://postgres.ai/api/general"
+        expect_failure: ""
+
+      - name: "https to a named host"
+        url: "https://platform.example.test/api/general"
+        expect_failure: ""
+
+      - name: "loopback http is how a rig runs"
+        url: "http://127.0.0.1:8080/api/general"
+        expect_failure: ""
+
+      - name: "localhost http is a loopback too"
+        url: "http://localhost:8080/api/general"
+        expect_failure: ""
+
+      - name: "https to an IP is a warning, not a refusal"
+        url: "https://10.0.0.5/api/general"
+        expect_failure: ""
+
+      - name: "plain http to a named host is refused"
+        url: "http://platform.example.test/api/general"
+        expect_failure: "plain http"
+
+      - name: "plain http to a routable IP is refused"
+        url: "http://10.0.0.5/api/general"
+        expect_failure: "plain http"
+
+      - name: "a value that is not an address is refused"
+        url: "postgres.ai/api/general"
+        expect_failure: "is not an http(s) address"
+
+      - name: "a scheme the agent will not dial is refused"
+        url: "ftp://platform.example.test/api"
+        expect_failure: "is not an http(s) address"
+
+      - name: "an empty address is refused"
+        url: ""
+        expect_failure: "is not an http(s) address"
+
+      # A host that merely BEGINS with a loopback name is not loopback: these are
+      # routable names someone else can own, and the access token is a request header.
+      - name: "a host that merely starts with 'localhost' is not loopback"
+        url: "http://localhost.attacker.example/api/general"
+        expect_failure: "plain http"
+
+      - name: "a host that merely starts with '127.' is not loopback"
+        url: "http://127.attacker.example/api/general"
+        expect_failure: "plain http"
+
+      - name: "a host that merely starts with '127.0.0.1' is not loopback"
+        url: "http://127.0.0.1.attacker.example/api/general"
+        expect_failure: "plain http"
+
+      - name: "'localhostx' is not loopback either"
+        url: "http://localhostx:8080/api/general"
+        expect_failure: "plain http"
+
+      - name: "https to such a host is still fine, the scheme is what protects the token"
+        url: "https://localhost.attacker.example/api/general"
+        expect_failure: ""
+
+      - name: "IPv6 loopback http is still accepted"
+        url: "http://[::1]:8080/api/general"
+        expect_failure: ""
+
+      - name: "a loopback address other than 127.0.0.1 is still accepted"
+        url: "http://127.0.0.53:8080/api/general"
+        expect_failure: ""
+
+  tasks:
+    - name: "Case: {{ case.name }}"
+      ansible.builtin.include_tasks: run_preflight_case.yml
+      loop: "{{ preflight_cases }}"
+      loop_control:
+        loop_var: case
+        label: "{{ case.name }}"
+
+- name: "DBLab agent | the token in the DBLab Engine configuration"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    engine_template: "{{ playbook_dir }}/../../roles/dblab-engine/templates/server.yml.j2"
+    render_dir: "/tmp/dblab-agent-test/render"
+    # Both conditions must hold for the token to appear. Off by default, because
+    # the Platform refuses an instance-scoped token at v1.dblab_token_check and
+    # the engine will not start on a token that check rejects.
+    render_cases:
+      - name: neither
+        token: ""
+        set_engine_token: false
+      - name: token-only
+        token: "rendered-token-xyz"
+        set_engine_token: false
+      - name: flag-only
+        token: ""
+        set_engine_token: true
+      - name: both
+        token: "rendered-token-xyz"
+        set_engine_token: true
+  tasks:
+    # The engine's own defaults, so this renders what a deploy renders.
+    # 'vars_files' would outrank the play's vars, hence include_vars + set_fact.
+    - name: Include main variables
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../vars/main.yml"
+
+    - name: "Set variable: the platform identity that makes the engine emit a platform block"
+      ansible.builtin.set_fact:
+        platform_project_name: "test-project"
+        platform_org_key: "test-org-key"
+
+    - name: Create the render directory
+      ansible.builtin.file:
+        path: "{{ render_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: "Render the engine configuration: {{ case.name }}"
+      ansible.builtin.include_tasks: run_render_case.yml
+      loop: "{{ render_cases }}"
+      loop_control:
+        loop_var: case
+        label: "{{ case.name }}"
+
+    - name: Read every render back
+      ansible.builtin.slurp:
+        src: "{{ render_dir }}/server-{{ render_item }}.yml"
+      register: renders
+      loop: "{{ render_cases | map(attribute='name') | list }}"
+      loop_control:
+        loop_var: render_item
+
+    - name: "Set variable: rendered configurations"
+      ansible.builtin.set_fact:
+        rendered: "{{ dict(render_cases | map(attribute='name') | zip(renders.results | map(attribute='content') | map('b64decode'))) }}"
+
+    # With either condition unmet nothing may appear: the pull-model
+    # configuration has to stay what it is today, down to the byte.
+    - name: Assert that only both conditions together emit the token
+      ansible.builtin.assert:
+        that:
+          - rendered['token-only'] == rendered['neither']
+          - rendered['flag-only'] == rendered['neither']
+          - rendered['both'] != rendered['neither']
+          - rendered['neither'] is not search('(?m)^  accessToken:')
+        quiet: true
+
+    - name: Assert that the token is rendered indented into the platform block
+      ansible.builtin.assert:
+        that:
+          - >-
+            rendered['both'] is search('(?m)^  accessToken: "rendered-token-xyz"$')
+        quiet: true
+
+    - name: Assert that the token block is the only difference
+      ansible.builtin.assert:
+        that:
+          - >-
+            (rendered['both'] | regex_replace(token_block_re, '')) == rendered['neither']
+        quiet: true
+      vars:
+        token_block_re: '\n  # Token for authorization in Platform API\. Minted[\s\S]*?\n  accessToken: "rendered-token-xyz"\n'
+
+    - name: Remove the temporary directory
+      ansible.builtin.file:
+        path: "/tmp/dblab-agent-test"
+        state: absent
+
+
+- name: "DBLab agent | the running agent is restarted when its configuration changes"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Read the role's task list
+      ansible.builtin.slurp:
+        src: "{{ playbook_dir }}/../../roles/dblab-agent/tasks/main.yml"
+      register: role_tasks_raw
+
+    - name: "Set variable: role_tasks"
+      ansible.builtin.set_fact:
+        role_tasks: "{{ role_tasks_raw.content | b64decode | from_yaml }}"
+
+    # Matched on 'register' and on the module key, never on a task name: a name is
+    # a comment, and a test that reads one keeps passing after the task it names
+    # has stopped doing anything.
+    - name: "Set variable: config_task"
+      ansible.builtin.set_fact:
+        config_task: "{{ role_tasks | selectattr('register', 'defined') |
+                         selectattr('register', 'eq', 'dblab_agent_config_written') | list }}"
+
+    - name: "Set variable: container_task"
+      ansible.builtin.set_fact:
+        container_task: "{{ container_task | default([]) + [item] }}"
+      loop: "{{ role_tasks }}"
+      when: "'community.docker.docker_container' in item"
+      loop_control:
+        label: "{{ item.name | default('') }}"
+
+    # '.pgwatch-config' is bind-mounted as a single FILE, so the container keeps
+    # reading the inode it had at start, and 'template' replaces the file rather
+    # than rewriting it. Without the restart, a token or address change reports
+    # 'changed' and never reaches the running agent.
+    - name: Assert that the agent container is restarted when '.pgwatch-config' changes
+      ansible.builtin.assert:
+        that:
+          - config_task | length == 1
+          - (container_task | default([])) | length == 1
+          - "'/.pgwatch-config:/app/.pgwatch-config' in (container_spec.volumes | join(' '))"
+          - container_spec.restart is defined
+          - "'dblab_agent_config_written is changed' in container_spec.restart"
+        fail_msg: >-
+          The agent container is not restarted when its '.pgwatch-config' changes. A single-file
+          bind mount resolves to an inode at container start, so without it a token or address
+          change reports 'changed' and never reaches the running agent.
+        quiet: true
+      vars:
+        container_spec: "{{ (container_task | default([{}]))[0]['community.docker.docker_container'] | default({}) }}"
+
+    # Matched on the module key and its value, never on a task name.
+    - name: "Set variable: flush_task"
+      ansible.builtin.set_fact:
+        flush_task: "{{ flush_task | default([]) + [item] }}"
+      loop: "{{ role_tasks }}"
+      when:
+        - "'ansible.builtin.meta' in item"
+        - item['ansible.builtin.meta'] == 'flush_handlers'
+      loop_control:
+        label: "{{ item.name | default('') }}"
+
+    # 'flush_handlers' flushes EVERY pending handler, not this role's. Ungated it
+    # pulls the engine restart the 'dblab-engine' role queued out of end-of-play
+    # into the middle of this role - after the healthz check above and before the
+    # agent starts, so the agent's first calls hit a restarting engine.
+    - name: Assert that handlers are flushed only when this role notified one
+      ansible.builtin.assert:
+        that:
+          - (flush_task | default([])) | length == 1
+          - (flush_task | default([{}]))[0].when is defined
+          - "'dblab_agent_set_engine_token' in ((flush_task | default([{}]))[0].when | string)"
+        fail_msg: >-
+          The handler flush is not gated on 'dblab_agent_set_engine_token'. This role notifies a
+          handler only when it writes the token into the engine configuration; flushing
+          unconditionally restarts the engine mid-role for every other install too.
+        quiet: true
+
+    - name: "Set variable: engine_addresses"
+      ansible.builtin.set_fact:
+        engine_addresses: "{{ engine_addresses | default([]) +
+                              [(item['ansible.builtin.wait_for'] | default({}, true)).host | default('')] +
+                              [(item['ansible.builtin.uri'] | default({}, true)).url | default('')] }}"
+      loop: "{{ role_tasks }}"
+      when: "'ansible.builtin.wait_for' in item or 'ansible.builtin.uri' in item"
+      loop_control:
+        label: "{{ item.name | default('') }}"
+
+    # 'localhost' resolves to '::1' first on a dual-stack host, and the engine
+    # publishes on 'dblab_engine_container_host' (127.0.0.1) only, so the wait
+    # would burn the whole dblab_engine_start_timeout and then fail. The engine
+    # address the agent is handed is built from that same variable.
+    - name: Assert that the engine is addressed by its variable, not by the name 'localhost'
+      ansible.builtin.assert:
+        that:
+          - (engine_addresses | default([])) | select('search', 'localhost') | list | length == 0
+          - (engine_addresses | default([])) | select('search', 'dblab_engine_container_host') | list | length == 2
+        fail_msg: >-
+          A task in the role addresses the DBLab Engine as 'localhost'. Use
+          'dblab_engine_container_host', the address the engine actually publishes on and the one
+          'dblab_agent_dblab_url' hands to the agent.
+        quiet: true
+
+...

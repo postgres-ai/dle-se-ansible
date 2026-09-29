@@ -1,0 +1,27 @@
+---
+
+- name: Reset the case state
+  ansible.builtin.set_fact:
+    dblab_agent_api_base_url: "{{ case.url }}"
+    case_failed: false
+    case_failure_message: ""
+
+- name: Run the preflight
+  block:
+    - name: Preflight checks for the DBLab agent
+      ansible.builtin.include_tasks: "{{ dblab_agent_tasks }}/preflight.yml"
+  rescue:
+    - name: Record the failure
+      ansible.builtin.set_fact:
+        case_failed: true
+        case_failure_message: "{{ ansible_failed_result.msg | default('') }}"
+
+- name: "Assert the outcome: {{ case.name }}"
+  ansible.builtin.assert:
+    that:
+      - case_failed == (case.expect_failure | length > 0)
+      - (case.expect_failure | length < 1) or (case.expect_failure in case_failure_message)
+    fail_msg: "{{ case.name }}: failed={{ case_failed }}, message='{{ case_failure_message }}'"
+    quiet: true
+
+...

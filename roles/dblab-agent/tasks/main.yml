@@ -1,0 +1,169 @@
+---
+
+# Installs the agent that makes this DBLab server call the Platform instead of
+# waiting to be called (platform-all#811). Gated on 'dblab_agent_install' and
+# tagged 'dblab-agent': with the flag off nothing here runs, and
+# '--tags dblab-agent' switches an already-installed server without
+# reinstalling or restarting the engine.
+
+- name: Preflight checks for the DBLab agent
+  ansible.builtin.include_tasks: preflight.yml
+
+# Needed on a switch, where the 'dblab-engine' role is tagged out and nothing
+# else has waited for the engine. On a fresh install the engine is already up
+# and both checks return immediately. Addressed by 'dblab_engine_container_host'
+# and not by the name 'localhost': that name resolves to '::1' first on a
+# dual-stack host, and the engine publishes on 127.0.0.1 only. It is the address
+# 'dblab_agent_dblab_url' hands to the agent, so this checks what the agent uses.
+- name: Wait for the DBLab Engine API port to be available
+  ansible.builtin.wait_for:
+    port: "{{ dblab_engine_port }}"
+    host: "{{ dblab_engine_container_host }}"
+    state: started
+    timeout: "{{ dblab_engine_start_timeout | default(300) }}"
+
+- name: Ensure the DBLab Engine API is healthy
+  ansible.builtin.uri:
+    url: "http://{{ dblab_engine_container_host }}:{{ dblab_engine_port }}/healthz"
+  register: dblab_agent_engine_health
+  until: dblab_agent_engine_health.status == 200
+  retries: "{{ (dblab_engine_start_timeout | default(300)) // 10 }}"
+  delay: 10
+
+# The engine assigns itself this id on first boot and reads the file back
+# verbatim on every boot. It is NEVER written here: the engine's own reader does
+# not trim, so a file written by 'echo' or 'lineinfile' would make it register
+# '<id>\n' as a second instance.
+- name: Read the instance ID the DBLab Engine assigned itself
+  ansible.builtin.slurp:
+    src: "{{ dblab_engine_meta_path }}/instance_id"
+  register: dblab_agent_instance_id_slurp
+
+- name: "Set variable: dblab_agent_instance_id"
+  ansible.builtin.set_fact:
+    dblab_agent_instance_id: "{{ dblab_agent_instance_id_slurp.content | b64decode }}"
+
+- name: Ensure the instance ID is exactly what the engine sends
+  ansible.builtin.assert:
+    that:
+      - dblab_agent_instance_id | length > 0
+      - dblab_agent_instance_id == dblab_agent_instance_id | trim
+    fail_msg: >-
+      '{{ dblab_engine_meta_path }}/instance_id' is empty or carries surrounding whitespace.
+      The engine reads this file without trimming it, so registering the trimmed value here
+      would create a second, separate DBLab instance on the Platform. Rewrite the file with
+      the exact id and no trailing newline, restart the engine, then re-run.
+    quiet: true
+
+# Always asks. 'mint_token' is defaulted off on the Platform, so a call that
+# does not ask is answered 'not_requested' - which this playbook treats as a
+# fault, since it always asks.
+- name: Register this DBLab instance with the Platform
+  ansible.builtin.uri:
+    url: "{{ dblab_agent_api_base_url }}/rpc/dblab_instance_register"
+    method: POST
+    headers:
+      Org-Key: "{{ platform_org_key }}"
+      Accept: "application/json"
+    body_format: json
+    body:
+      selfassigned_instance_id: "{{ dblab_agent_instance_id }}"
+      project_name: "{{ platform_project_name }}"
+      mint_token: true
+    return_content: true
+    timeout: 60
+  register: dblab_agent_register
+  no_log: true  # the reply carries the Platform access token
+  failed_when: false
+  changed_when: false
+
+- name: Act on the registration reply
+  ansible.builtin.include_tasks: handle_registration.yml
+
+- name: Create the DBLab agent configuration directory
+  ansible.builtin.file:
+    dest: "{{ dblab_agent_config_path }}"
+    state: directory
+    owner: "{{ dblab_agent_uid }}"
+    group: "{{ dblab_agent_gid }}"
+    mode: "0700"
+
+# 0600 and owned by the uid the container runs as. Anything else and the agent
+# reports "config unreadable; check its owner and mode" and idles.
+- name: Generate the DBLab agent configuration '{{ dblab_agent_config_path }}/.pgwatch-config'
+  ansible.builtin.template:
+    src: templates/pgwatch-config.j2
+    dest: "{{ dblab_agent_config_path }}/.pgwatch-config"
+    owner: "{{ dblab_agent_uid }}"
+    group: "{{ dblab_agent_gid }}"
+    mode: "0600"
+  register: dblab_agent_config_written
+  diff: false  # the file is a credential
+
+# One client, one token. Reloaded with SIGHUP rather than restarted, so a server
+# that is already serving clones is not interrupted. Off by default: see
+# dblab_agent_set_engine_token in vars/main.yml.
+- name: Store the Platform access token in the DBLab Engine configuration
+  ansible.builtin.template:
+    src: "{{ role_path }}/../dblab-engine/templates/server.yml.j2"
+    dest: "{{ dblab_engine_config_path }}/server.yml"
+    owner: "{{ username }}"
+    group: "{{ username }}"
+    mode: "0644"
+  diff: false  # the file now carries a credential
+  notify: "reload dblab_server for the agent token"
+  when:
+    - dblab_agent_set_engine_token | bool
+    - dblab_engine_config_file is not defined or
+      dblab_engine_config_file | length < 1
+
+- name: Warn that a supplied DBLab Engine configuration file needs the token added by hand
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: dblab_engine_config_file is set, so '{{ dblab_engine_config_path }}/server.yml' is
+      managed outside this playbook and the Platform access token was not written into it. Add
+      'platform.accessToken' to that file yourself, or the engine and the agent will hold
+      different credentials.
+  when:
+    - dblab_agent_set_engine_token | bool
+    - dblab_engine_config_file is defined
+    - dblab_engine_config_file | length > 0
+
+# Only this role's own handler is ever pending here, and only when the token was
+# written into the engine configuration. 'flush_handlers' flushes every pending
+# handler, so ungated it would also pull the engine restart the 'dblab-engine'
+# role queued out of end-of-play into the middle of this role.
+- name: Make sure the DBLab Engine has reloaded before the agent starts
+  ansible.builtin.meta: flush_handlers
+  when: dblab_agent_set_engine_token | bool
+
+# Host networking: the engine listens on loopback only, and the agent has no
+# inbound port of its own, so nothing is exposed by it. The rest mirrors the
+# hardening the agent's own compose service carries.
+- name: Ensure that the DBLab agent container is running
+  community.docker.docker_container:
+    name: "{{ dblab_agent_container_name }}"
+    image: "{{ dblab_agent_image }}"
+    state: started
+    restart_policy: unless-stopped
+    container_default_behavior: "compatibility"
+    network_mode: host
+    user: "{{ dblab_agent_uid }}:{{ dblab_agent_gid }}"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opts:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:noexec,nosuid,nodev,size=16m
+    cpus: "{{ dblab_agent_cpus }}"
+    memory: "{{ dblab_agent_memory }}"
+    # The mount below is a single FILE, so it resolves to the inode the file had
+    # when the container started, and 'template' replaces the file rather than
+    # rewriting it. Without this a re-run that changes the token or an address
+    # reports 'changed' and the running agent keeps reading the old one.
+    restart: "{{ dblab_agent_config_written is changed }}"
+    volumes:
+      - "{{ dblab_agent_config_path }}/.pgwatch-config:/app/.pgwatch-config:ro"
+
+...

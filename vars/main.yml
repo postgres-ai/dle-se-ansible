@@ -51,6 +51,37 @@ dblab_engine_start_timeout: 300  # Maximum wait time for DBLab Engine availabili
 platform_project_name: ""  # Project name
 platform_org_key: ""  # Organization key
 
+# DBLab agent (inverted mode: the DBLab server calls the Platform)
+# The agent registers this engine with the Platform, stores the per-instance
+# token it is given and then asks the Platform for work. Nothing dials in, so
+# the server needs no public address and no open port. See platform-all#811.
+dblab_agent_install: false  # do not install the agent by default; inverted mode is an explicit choice
+# NOTE: no RELEASED image carries the DBLab channel yet - it lives on postgresai
+# feature/dblab-call-channel. Until that ships, set this to a build of that branch;
+# an agent without the channel reads no dblab_token, idles and reports unhealthy.
+dblab_agent_version: "0.17.0-rc.4"
+dblab_agent_image: "postgresai/instance-jobs:{{ dblab_agent_version | replace('v', '') }}"
+dblab_agent_container_name: dblab_agent
+dblab_agent_config_path: "{{ dblab_engine_base_path }}/agent"  # holds '.pgwatch-config', the agent's only file
+# The agent image runs as its own unprivileged user (uid 1001). '.pgwatch-config' is 0600, so the
+# container has to BE that owner: a mismatch is reported as "config unreadable; check its owner and mode".
+dblab_agent_uid: 1001
+dblab_agent_gid: 1001
+dblab_agent_cpus: 0.25
+dblab_agent_memory: "256M"
+# The engine as the agent addresses it. The two run on the same box, so this is loopback and plain
+# http is the norm - the request never leaves the machine.
+dblab_agent_dblab_url: "http://{{ dblab_engine_container_host }}:{{ dblab_engine_port }}"
+# The Platform the agent registers with and polls. Kept identical to what the engine config renders,
+# so the two never disagree about which Platform this box belongs to.
+dblab_agent_api_base_url: "{{ platform_url | default('https://postgres.ai/api/general') }}"
+# Also write the token into the engine's 'platform.accessToken'. OFF until the Platform accepts
+# an instance-scoped token there: v1.dblab_token_check calls api_token_check without
+# allow_dblab_scope, so it answers PT403, and the engine REFUSES TO START on a token that check
+# rejects (platform.New -> log.Errf -> return). The agent's own channel is unaffected: it
+# authenticates through dblab_instance_token_auth, which does allow the scope.
+dblab_agent_set_engine_token: false
+
 # CLI
 cli_install: true
 cli_version: "{{ dblab_engine_version | replace('v', '') }}"

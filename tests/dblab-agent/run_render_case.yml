@@ -1,0 +1,14 @@
+---
+
+- name: "Set variables for the render case: {{ case.name }}"
+  ansible.builtin.set_fact:
+    dblab_agent_platform_token: "{{ case.token }}"
+    dblab_agent_set_engine_token: "{{ case.set_engine_token }}"
+
+- name: "Render the engine configuration: {{ case.name }}"
+  ansible.builtin.template:
+    src: "{{ engine_template }}"
+    dest: "{{ render_dir }}/server-{{ case.name }}.yml"
+    mode: "0600"
+
+...

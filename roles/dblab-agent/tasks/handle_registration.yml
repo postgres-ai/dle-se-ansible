@@ -1,0 +1,91 @@
+---
+
+# Turns the registration reply into a usable token or a named failure. Its own
+# file so a stubbed reply can drive it (tests/dblab-agent/).
+#
+#   minted        -> the plaintext rides this reply and is never sent again
+#   existing      -> a live token exists; success only if this box already holds it
+#   no_owner      -> nobody to attribute the token to; registration itself succeeded
+#   not_requested -> the Platform did not see mint_token, which we always send
+#   404/PGRST202  -> the Platform has no three-argument form of this function yet
+
+# PostgREST maps an unknown function to 404, the same status a swept job gets,
+# so the body's 'code' is what discriminates - never the status alone.
+- name: Fail when the Platform cannot mint a per-instance token yet
+  ansible.builtin.fail:
+    msg: >-
+      {{ dblab_agent_api_base_url }}/rpc/dblab_instance_register does not accept 'mint_token'.
+      This Platform predates platform-all#812; upgrade it before enrolling a DBLab server in
+      inverted mode. (PostgREST answered {{ dblab_agent_register.status | default('no status') }}
+      {{ dblab_agent_register.json.code | default('') }}.)
+  when:
+    - dblab_agent_register.json.code | default('') == 'PGRST202'
+      or dblab_agent_register.status | default(0) | int == 404
+
+- name: Fail when registration was refused
+  ansible.builtin.fail:
+    msg: >-
+      Registering this DBLab instance with {{ dblab_agent_api_base_url }} failed
+      (HTTP {{ dblab_agent_register.status | default('none') }}).
+      {{ dblab_agent_register.json.message | default(dblab_agent_register.msg | default('')) }}
+      {{ dblab_agent_register.json.details | default('') }}
+  when: dblab_agent_register.status | default(0) | int != 200
+
+- name: "Set variable: dblab_agent_register_status"
+  ansible.builtin.set_fact:
+    dblab_agent_register_status: "{{ dblab_agent_register.json.platform_access_token_status | default('', true) }}"
+
+- name: Fail on an access token status this playbook does not know
+  ansible.builtin.fail:
+    msg: >-
+      The Platform reported platform_access_token_status='{{ dblab_agent_register_status }}',
+      which this playbook does not know how to act on. Nothing has been written. Upgrade
+      dle-se-ansible, or report this against platform-all#812.
+  when: dblab_agent_register_status not in ['minted', 'existing', 'no_owner', 'not_requested']
+
+- name: Fail when the Platform ignored the mint request
+  ansible.builtin.fail:
+    msg: >-
+      The Platform answered 'not_requested' although this install sent mint_token. That is
+      impossible against a Platform that reads the parameter, so something between here and
+      {{ dblab_agent_api_base_url }} dropped it from the request body. Nothing has been written.
+  when: dblab_agent_register_status == 'not_requested'
+
+- name: Fail when the organization has nobody to attribute a token to
+  ansible.builtin.fail:
+    msg: >-
+      The Platform registered this instance but could not mint a token for it: the organization
+      that owns project '{{ platform_project_name }}' has no owner to attribute the token to.
+      Ask an organization admin to set an owner, then re-run with --tags dblab-agent.
+  when: dblab_agent_register_status == 'no_owner'
+
+- name: Fail when a live token exists that this server does not hold
+  ansible.builtin.fail:
+    msg: >-
+      The Platform already has a live access token for DBLab instance
+      '{{ dblab_agent_instance_id | default('(unknown)') }}' and will not mint a second one,
+      but this server holds none ({{ dblab_agent_config_path }}/.pgwatch-config).
+      An organization admin has to revoke the existing token first
+      (v1.dblab_instance_token_revoke); then re-run with --tags dblab-agent.
+  when:
+    - dblab_agent_register_status == 'existing'
+    - dblab_agent_platform_token | default('', true) | length < 1
+
+# The only branch that writes the token. 'existing' deliberately keeps the one
+# already on disk: a re-run must never put a null over a working config.
+- name: "Set variable: dblab_agent_platform_token (minted by the Platform)"
+  ansible.builtin.set_fact:
+    dblab_agent_platform_token: "{{ dblab_agent_register.json.platform_access_token | default('', true) }}"
+  no_log: true
+  when: dblab_agent_register_status == 'minted'
+
+- name: Ensure this server now has a Platform access token
+  ansible.builtin.assert:
+    that:
+      - dblab_agent_platform_token | default('', true) | length > 0
+    fail_msg: >-
+      The Platform reported platform_access_token_status='{{ dblab_agent_register_status }}'
+      but no usable token is available. Nothing has been written.
+    quiet: true
+
+...

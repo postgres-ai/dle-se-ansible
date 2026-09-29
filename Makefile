@@ -64,12 +64,18 @@ reinitialization-dev: ## Return to initial state of Bootstrap Ansible for develo
 tests: ## tests Ansible
 	$(MAKE) docker-tests
 	$(MAKE) lint
+	$(MAKE) test-dblab-agent
 	$(MAKE) molecule-test-all
 
 .PHONY: tests-fast
 tests-fast: ## tests Ansible quickly
 	$(MAKE) lint
+	$(MAKE) test-dblab-agent
 	$(MAKE) molecule-converge
+
+.PHONY: test-dblab-agent
+test-dblab-agent: ## Run the dblab-agent role tests (localhost only, no target host)
+	source .venv/bin/activate && ansible-playbook tests/dblab-agent/test.yml
 
 ## —— Clean ——————————————————————————————————————————————————————————————————————————————————————
 .PHONY: clean

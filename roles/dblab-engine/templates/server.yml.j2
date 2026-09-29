@@ -387,6 +387,14 @@ platform:
 
   # Organization key
   orgKey: "{{ platform_org_key }}"
+{% if dblab_agent_set_engine_token | default(false) | bool and dblab_agent_platform_token | default('', true) | length > 0 %}
+
+  # Token for authorization in Platform API. Minted for this instance by
+  # v1.dblab_instance_register when the DBLab agent was installed
+  # (dblab_agent_install), so the engine and the agent use one credential.
+  # This token needs to be kept in secret, known only to the administrator.
+  accessToken: "{{ dblab_agent_platform_token }}"
+{% endif %}
 {% else %}
 #platform:
   # Platform API URL. To work with Postgres.ai SaaS, keep it default

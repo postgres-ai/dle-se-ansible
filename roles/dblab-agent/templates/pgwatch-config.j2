@@ -1,0 +1,12 @@
+# DBLab agent (instance-jobs) settings. The agent re-reads this file on every
+# poll, but the container bind-mounts it as a single file and the playbook
+# replaces it rather than rewriting it in place, so a change only reaches a
+# RUNNING agent because the container task restarts it. Do not drop that.
+#
+# 'key=value', unindented, first occurrence of a key wins. Do not add
+# 'instance_id': one server serves one channel, and a file naming both a
+# monitoring instance and a DBLab engine is reported as a fault.
+dblab_token={{ dblab_agent_platform_token }}
+dblab_verify_token={{ dblab_engine_verification_token }}
+dblab_url={{ dblab_agent_dblab_url }}
+api_base_url={{ dblab_agent_api_base_url }}
