@@ -1,0 +1,21 @@
+# Joe agent (instance-jobs) settings. The agent re-reads this file on every poll,
+# but the container bind-mounts it as a single file and the playbook replaces it
+# rather than rewriting it in place, so a change only reaches a RUNNING agent
+# because the container task restarts it. Do not drop that.
+#
+# 'key=value', unindented, first occurrence of a key wins. Do not add
+# 'instance_id' or any 'dblab_' key: one container serves one channel, and a file
+# naming two is reported as a fault. The DBLab agent on this same box has its own
+# file at '{{ dblab_agent_config_path }}/.pgwatch-config'.
+#
+# 'joe_verify_token' is the HMAC signing key, not a bearer token, and never goes
+# on the wire: it is named for symmetry with 'dblab_verify_token'. Its value is
+# Joe's own webui 'signingSecret'.
+#
+# NOTE: no RELEASED image carries the Joe channel yet - it arrives with
+# postgresai!445. An agent without the channel reads no joe_token, idles and
+# reports unhealthy.
+joe_token={{ joe_agent_platform_token }}
+joe_verify_token={{ joe_agent_signing_secret }}
+joe_url={{ joe_agent_joe_url }}
+api_base_url={{ joe_agent_api_base_url }}

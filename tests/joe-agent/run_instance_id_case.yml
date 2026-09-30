@@ -1,0 +1,44 @@
+---
+
+# A case that states no 'content' is the engine-never-booted case: the file does
+# not exist at all, which is a different branch from an empty one.
+- name: "Remove the fixture: {{ case.name }}"
+  ansible.builtin.file:
+    path: "{{ joe_agent_instance_id_file }}"
+    state: absent
+  when: case.content is not defined
+
+- name: "Write the fixture: {{ case.name }}"
+  ansible.builtin.copy:
+    content: "{{ case.content }}"
+    dest: "{{ joe_agent_instance_id_file }}"
+    mode: "0600"
+  when: case.content is defined
+
+- name: Reset the case state
+  ansible.builtin.set_fact:
+    case_failed: false
+    case_failure_message: ""
+
+- name: Read the instance ID
+  block:
+    - name: Read the instance ID this box registers under
+      ansible.builtin.include_tasks: "{{ joe_agent_tasks }}/read_instance_id.yml"
+  rescue:
+    - name: Record the failure
+      ansible.builtin.set_fact:
+        case_failed: true
+        case_failure_message: "{{ ansible_failed_result.msg | default('') }}"
+
+- name: "Assert the outcome: {{ case.name }}"
+  ansible.builtin.assert:
+    that:
+      - case_failed == (case.expect_failure | length > 0)
+      - (case.expect_failure | length < 1) or (case.expect_failure in case_failure_message)
+      - (case.expect_failure | length > 0) or (joe_agent_instance_id == case.expect_id)
+    fail_msg: >-
+      {{ case.name }}: failed={{ case_failed }}, message='{{ case_failure_message }}',
+      id='{{ joe_agent_instance_id | default('') }}'
+    quiet: true
+
+...

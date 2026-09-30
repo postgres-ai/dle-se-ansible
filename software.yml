@@ -145,6 +145,12 @@
     - role: joe-bot
       when: joe_bot_install | bool
 
+    # Joe agent (inverted mode: the Joe on this server calls the Platform).
+    # After 'joe-bot': the agent waits for the Joe it is going to serve.
+    - role: joe-agent
+      when: joe_agent_install | bool
+      tags: joe-agent
+
     # Proxy server
     - role: proxy
 

@@ -1,0 +1,806 @@
+---
+
+# Tests for the 'joe-agent' role's decision logic. Run from the repository root:
+#
+#   ansible-playbook tests/joe-agent/test.yml
+#
+# Everything here runs on localhost and touches nothing but a temporary
+# directory. The preflight reads only variables, and the configuration is a
+# template, so both can be driven directly.
+#
+# Each expected failure asserts the TEXT of the message it expects, not merely
+# that something failed: a test that only checks "it failed" passes for the wrong
+# branch, and every branch here fails.
+
+- name: "Joe agent | the preflight"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    joe_agent_tasks: "{{ playbook_dir }}/../../roles/joe-agent/tasks"
+    preflight_cases:
+      # The Platform address. The agent sends its access token as a request
+      # header, so plain http is accepted only against this server itself.
+      - name: "the production Platform address"
+        expect_failure: ""
+
+      - name: "https to a named Platform host"
+        api_base_url: "https://platform.example.test/api/general"
+        expect_failure: ""
+
+      - name: "loopback http to the Platform is how a rig runs"
+        api_base_url: "http://127.0.0.1:8080/api/general"
+        expect_failure: ""
+
+      - name: "localhost http to the Platform is a loopback too"
+        api_base_url: "http://localhost:8080/api/general"
+        expect_failure: ""
+
+      - name: "https to a Platform IP is a warning, not a refusal"
+        api_base_url: "https://10.0.0.5/api/general"
+        expect_failure: ""
+
+      - name: "plain http to a named Platform host is refused"
+        api_base_url: "http://platform.example.test/api/general"
+        expect_failure: "plain http"
+
+      - name: "a Platform address that is not an address is refused"
+        api_base_url: "postgres.ai/api/general"
+        expect_failure: "is not an http(s) address"
+
+      - name: "an empty Platform address is refused"
+        api_base_url: ""
+        expect_failure: "is not an http(s) address"
+
+      # A host that merely BEGINS with a loopback name is a routable name someone
+      # else can own, and the access token is a request header.
+      - name: "a Platform host that merely starts with 'localhost' is not loopback"
+        api_base_url: "http://localhost.attacker.example/api/general"
+        expect_failure: "plain http"
+
+      - name: "a Platform host that merely starts with '127.0.0.1' is not loopback"
+        api_base_url: "http://127.0.0.1.attacker.example/api/general"
+        expect_failure: "plain http"
+
+      - name: "IPv6 loopback http to the Platform is accepted"
+        api_base_url: "http://[::1]:8080/api/general"
+        expect_failure: ""
+
+      # Joe's address. A base address only: the agent appends '/webui/' itself.
+      - name: "the default loopback Joe address"
+        joe_url: "http://127.0.0.1:2400"
+        expect_failure: ""
+
+      - name: "a bare trailing slash on the Joe address is still a base address"
+        joe_url: "http://127.0.0.1:2400/"
+        expect_failure: ""
+
+      - name: "a path on the Joe address is refused"
+        joe_url: "http://127.0.0.1:2400/webui"
+        expect_failure: "no path"
+
+      - name: "the agent's own '/webui/' path is refused, it appends that itself"
+        joe_url: "http://127.0.0.1:2400/webui/command"
+        expect_failure: "no path"
+
+      - name: "a Joe address that is not an address is refused"
+        joe_url: "127.0.0.1:2400"
+        expect_failure: "is not an http(s) base address"
+
+      - name: "an empty Joe address is refused"
+        joe_url: ""
+        expect_failure: "is not an http(s) base address"
+
+      - name: "a scheme the agent will not dial is refused"
+        joe_url: "ftp://127.0.0.1:2400"
+        expect_failure: "is not an http(s) base address"
+
+      # Joe is meant to be on this server. Reaching one elsewhere over plain http
+      # is a warning rather than a refusal: whether the agent accepts it is the
+      # agent's rule, not this playbook's.
+      - name: "plain http to a Joe on another host is a warning, not a refusal"
+        joe_url: "http://joe.example.test:2400"
+        expect_failure: ""
+
+      - name: "https to a Joe on another host is accepted"
+        joe_url: "https://joe.example.test"
+        expect_failure: ""
+
+      # The signing secret is the one credential an operator types: the access
+      # token is minted by the Platform during registration, never supplied here.
+      - name: "an empty signing secret is refused"
+        signing_secret: ""
+        expect_failure: "joe_agent_signing_secret is empty"
+
+      - name: "a signing secret with a newline in it is refused"
+        signing_secret: "secret\napi_base_url=https://attacker.example"
+        expect_failure: "joe_agent_signing_secret carries a line break"
+
+      # The secret is not the only value rendered as a 'key=value' line, and the
+      # URL asserts above do NOT cover the others: 'urlsplit' strips '\r' and '\n'
+      # before they see the value, so they validate a different string than the
+      # template renders. Both of these pass every URL clause -
+      # 'http://127.0.0.1\ninstance_id=x' splits to host '127.0.0.1instance_id=x'
+      # with an empty path - and then inject a second setting into the file.
+      - name: "a Joe address with a newline in it is refused"
+        joe_url: "http://127.0.0.1:2400\ninstance_id=collide"
+        expect_failure: "joe_agent_joe_url carries a line break"
+
+      # First occurrence of a key wins, and 'joe_url' is rendered on the line above
+      # 'api_base_url', so this one replaces the Platform the agent polls.
+      - name: "a Joe address whose newline injects the Platform address is refused"
+        joe_url: "http://127.0.0.1:2400\napi_base_url=https://attacker.example"
+        expect_failure: "joe_agent_joe_url carries a line break"
+
+      - name: "a Platform address with a newline in it is refused"
+        api_base_url: "https://postgres.ai/api/general\ndblab_token=takeover"
+        expect_failure: "joe_agent_api_base_url carries a line break"
+
+      # The control for the four cases above: the same values without the newline
+      # are accepted, so the refusals are the newline and not the rest of the value.
+      - name: "the same values without a newline are accepted"
+        joe_url: "http://127.0.0.1:2400"
+        api_base_url: "https://postgres.ai/api/general"
+        signing_secret: "secret"
+        expect_failure: ""
+
+      # One container, one channel, one file. A shared '.pgwatch-config' does not
+      # merge the channels - the agent refuses a configuration naming two, so it
+      # stops the DBLab agent that was working before this role ran.
+      - name: "each agent's own configuration directory"
+        expect_failure: ""
+
+      - name: "the DBLab agent's directory is refused"
+        config_path: "/root/.dblab/agent"
+        expect_failure: "cannot share one '.pgwatch-config'"
+
+      - name: "the same directory with a trailing slash is still the same directory"
+        config_path: "/root/.dblab/agent/"
+        expect_failure: "cannot share one '.pgwatch-config'"
+
+      - name: "a directory the DBLab agent was moved to is refused too"
+        config_path: "/srv/agent"
+        dblab_config_path: "/srv/agent"
+        expect_failure: "cannot share one '.pgwatch-config'"
+
+      # The one incompatibility that cannot be configured away: Joe registers its
+      # HTTP handlers per communication type, so a Slack-only Joe serves no
+      # '/webui/' path at all.
+      - name: "a webui Joe is what the agent can serve"
+        communication_type: "webui"
+        expect_failure: ""
+
+      - name: "a WebUI Joe, spelled with capitals, is still a webui Joe"
+        communication_type: "WebUI"
+        expect_failure: ""
+
+      - name: "a slack-only Joe is refused"
+        communication_type: "slack"
+        expect_failure: "serves no '/webui/' surface"
+
+      - name: "a slackrtm-only Joe is refused"
+        communication_type: "slackrtm"
+        expect_failure: "serves no '/webui/' surface"
+
+      - name: "a slacksm-only Joe is refused"
+        communication_type: "slacksm"
+        expect_failure: "serves no '/webui/' surface"
+
+      # With a configuration file supplied, 'joe_communication_type' is what the
+      # 'joe-bot' role ignores, so the preflight must ignore it too. Such an
+      # install is checked against the running Joe instead.
+      - name: "a supplied configuration file makes joe_communication_type moot"
+        communication_type: "slack"
+        config_file: "/tmp/joe-agent-test/supplied-joe.yml"
+        expect_failure: ""
+
+  tasks:
+    - name: "Case: {{ case.name }}"
+      ansible.builtin.include_tasks: run_preflight_case.yml
+      loop: "{{ preflight_cases }}"
+      loop_control:
+        loop_var: case
+        label: "{{ case.name }}"
+
+- name: "Joe agent | the instance ID this box registers under"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    joe_agent_tasks: "{{ playbook_dir }}/../../roles/joe-agent/tasks"
+    instance_id_cases:
+      - name: "the id the engine wrote, with no trailing newline"
+        content: "cs0abcdefghijklmnopq"
+        expect_id: "cs0abcdefghijklmnopq"
+        expect_failure: ""
+
+      # The Platform stores the id verbatim and only trims it to decide whether it
+      # is empty, so a trailing newline here would register a second Joe instance
+      # that no later trimmed call ever finds again.
+      - name: "a trailing newline is refused, not trimmed away"
+        content: "cs0abcdefghijklmnopq\n"
+        expect_failure: "carries surrounding whitespace"
+
+      - name: "a leading space is refused too"
+        content: " cs0abcdefghijklmnopq"
+        expect_failure: "carries surrounding whitespace"
+
+      - name: "an empty file is refused"
+        content: ""
+        expect_failure: "is empty or carries surrounding whitespace"
+
+      # No 'content' at all: the file does not exist. Reachable through
+      # '--tags joe-agent', which tags out 'dblab-engine', so the engine can be
+      # installed but never have completed a first boot. A bare slurp would report
+      # 'failed to find <path>' and say nothing about the engine.
+      - name: "a missing file names the engine, not the slurp"
+        expect_failure: "has not assigned itself an instance id yet"
+
+      - name: "a file of whitespace is refused"
+        content: "   "
+        expect_failure: "carries surrounding whitespace"
+
+  tasks:
+    - name: "Set variable: the fixture path for this play"
+      ansible.builtin.set_fact:
+        joe_agent_instance_id_file: "/tmp/joe-agent-test/instance_id"
+
+    - name: Create the fixture directory
+      ansible.builtin.file:
+        path: "/tmp/joe-agent-test"
+        state: directory
+        mode: "0700"
+
+    - name: "Case: {{ case.name }}"
+      ansible.builtin.include_tasks: run_instance_id_case.yml
+      loop: "{{ instance_id_cases }}"
+      loop_control:
+        loop_var: case
+        label: "{{ case.name }}"
+
+- name: "Joe agent | registration outcomes"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    joe_agent_tasks: "{{ playbook_dir }}/../../roles/joe-agent/tasks"
+    joe_agent_api_base_url: "https://example.test/api/general"
+    joe_agent_config_path: "/tmp/joe-agent-test"
+    joe_agent_instance_id: "cs0abcdefghijklmnopq"
+    platform_project_name: "test-project"
+    registration_cases:
+      - name: "minted: the reply's token is taken"
+        reply:
+          status: 200
+          json:
+            platform_access_token: "minted-token-abc"
+            platform_access_token_status: "minted"
+        stored_token: ""
+        expect_token: "minted-token-abc"
+
+      - name: "existing: the token already on the box is kept"
+        reply:
+          status: 200
+          json:
+            platform_access_token: null
+            platform_access_token_status: "existing"
+        stored_token: "token-already-here"
+        expect_token: "token-already-here"
+
+      - name: "existing with nothing stored: an admin must revoke first"
+        reply:
+          status: 200
+          json:
+            platform_access_token: null
+            platform_access_token_status: "existing"
+        stored_token: ""
+        expect_failure: "v1.joe_instance_token_revoke"
+
+      - name: "not_requested: impossible, so it is loud"
+        reply:
+          status: 200
+          json:
+            platform_access_token: null
+            platform_access_token_status: "not_requested"
+        stored_token: ""
+        expect_failure: "dropped it from the request body"
+
+      # Registration succeeded and nothing was revoked: the id resolved to an
+      # instance in another organization, which this Org-Key gets no token for.
+      - name: "foreign_org: the id belongs to another organization"
+        reply:
+          status: 200
+          json:
+            platform_access_token: null
+            platform_access_token_status: "foreign_org"
+        stored_token: ""
+        expect_failure: "already exists in an organization other than"
+
+      - name: "PGRST202: the Platform has no joe_instance_register"
+        reply:
+          status: 404
+          json:
+            code: "PGRST202"
+            message: "Could not find the function"
+        stored_token: ""
+        expect_failure: "does not exist on this Platform"
+
+      - name: "404 without a code is still the un-migrated Platform"
+        reply:
+          status: 404
+          json: { }
+        stored_token: ""
+        expect_failure: "does not exist on this Platform"
+
+      # The ownerless organization arrives as a PT400, NOT as a status: Joe's
+      # created_by_user_id is NOT NULL, so there is no 'no_owner' to report.
+      # The Platform's own 'detail' and 'hint' have to reach the operator.
+      - name: "an ownerless organization is refused with its own detail"
+        reply:
+          status: 400
+          json:
+            message: "Bad Request"
+            detail: "This organization has no owner, so a self-registered Joe instance cannot be attributed to anyone."
+            hint: "Set the organization owner, or create the instance through the console."
+        stored_token: ""
+        expect_failure: "has no owner"
+
+      - name: "the hint is surfaced too, not only the detail"
+        reply:
+          status: 400
+          json:
+            message: "Bad Request"
+            detail: "This organization has no owner, so a self-registered Joe instance cannot be attributed to anyone."
+            hint: "Set the organization owner, or create the instance through the console."
+        stored_token: ""
+        expect_failure: "create the instance through the console"
+
+      - name: "an unrecognised Org-Key is reported as a refusal"
+        reply:
+          status: 400
+          json:
+            message: "Bad Request"
+            detail: "Cannot find org using org_key (header Org-Key)."
+        stored_token: ""
+        expect_failure: "Cannot find org using org_key"
+
+      - name: "an unknown status is never acted on"
+        reply:
+          status: 200
+          json:
+            platform_access_token: null
+            platform_access_token_status: "rotated"
+        stored_token: ""
+        expect_failure: "does not know how to act on"
+
+      # 'no_owner' is the DBLab twin's status and this Platform never sends it, so
+      # it must be treated as unknown rather than quietly handled.
+      - name: "the DBLab twin's 'no_owner' is not a Joe status"
+        reply:
+          status: 200
+          json:
+            platform_access_token: null
+            platform_access_token_status: "no_owner"
+        stored_token: ""
+        expect_failure: "does not know how to act on"
+
+      - name: "minted with no token is not treated as success"
+        reply:
+          status: 200
+          json:
+            platform_access_token: null
+            platform_access_token_status: "minted"
+        stored_token: ""
+        expect_failure: "no usable token is available"
+
+      # The token is rendered as the FIRST 'key=value' line, so a newline in it puts
+      # the remainder above every other setting and wins on a first-occurrence-wins
+      # parse. It should never happen - the Platform mints this - but the writer and
+      # the reader are asymmetric: read_token.yml matches '^joe_token=([^\r\n]*)',
+      # so a multi-line value would be written whole now and read back truncated on
+      # the next run, changing the config, restarting the container and losing the
+      # box its access with nothing said.
+      - name: "minted: a token with a newline in it is refused"
+        reply:
+          status: 200
+          json:
+            platform_access_token: "tok\njoe_verify_token=attacker-chosen"
+            platform_access_token_status: "minted"
+        stored_token: ""
+        expect_failure: "carries a line break"
+
+      # The control: the same reply without the newline is accepted, so the refusal
+      # above is the newline and not the shape of the reply.
+      - name: "minted: the same token without a newline is taken"
+        reply:
+          status: 200
+          json:
+            platform_access_token: "tokjoe_verify_token=attacker-chosen"
+            platform_access_token_status: "minted"
+        stored_token: ""
+        expect_token: "tokjoe_verify_token=attacker-chosen"
+
+  tasks:
+    # set_fact, not a play var: the preflight play above registers these as FACTS,
+    # and a fact outranks a play var for the rest of the run.
+    - name: "Set variable: the fixture paths for this play"
+      ansible.builtin.set_fact:
+        joe_agent_config_path: "/tmp/joe-agent-test"
+        joe_agent_instance_id: "cs0abcdefghijklmnopq"
+
+    - name: "Case: {{ case.name }}"
+      ansible.builtin.include_tasks: run_registration_case.yml
+      loop: "{{ registration_cases }}"
+      loop_control:
+        loop_var: case
+        label: "{{ case.name }}"
+
+- name: "Joe agent | reading the token already stored on the box"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    joe_agent_tasks: "{{ playbook_dir }}/../../roles/joe-agent/tasks"
+    joe_agent_config_path: "/tmp/joe-agent-test/stored"
+    stored_token_cases:
+      - name: "a file the role wrote"
+        content: |
+          # Joe agent settings.
+          joe_token=plain-token
+          joe_verify_token=verify
+          joe_url=http://127.0.0.1:2400
+        expect: "plain-token"
+
+      - name: "CRLF line endings"
+        content: "joe_token=crlf-token\r\njoe_verify_token=verify\r\n"
+        expect: "crlf-token"
+
+      - name: "a duplicate key: the first wins, as the agent's parser does"
+        content: |
+          joe_token=first-token
+          joe_token=second-token
+        expect: "first-token"
+
+      - name: "an indented key is not the credential, as the agent's parser has it"
+        content: |
+          # note the leading space
+           joe_token=indented
+          joe_token=real-token
+        expect: "real-token"
+
+      - name: "a commented-out token is not a token"
+        content: |
+          #joe_token=commented
+          joe_verify_token=verify
+        expect: ""
+
+      - name: "a file with no token at all"
+        content: |
+          api_base_url=https://example.test/api/general
+        expect: ""
+
+      - name: "surrounding whitespace is trimmed, as the agent's parser does"
+        content: "joe_token=   spaced-token   \n"
+        expect: "spaced-token"
+
+      # The DBLab agent's own file, read by mistake: it holds no joe_token, so
+      # this must read as no token rather than as the other channel's credential.
+      - name: "the DBLab agent's file holds no Joe token"
+        content: |
+          joe_verify_token=verify
+          dblab_token=the-dblab-token
+        expect: ""
+
+  tasks:
+    # set_fact for the same reason as the play above: a fact set by an earlier play
+    # would otherwise point this at the real install path.
+    - name: "Set variable: the fixture directory for this play"
+      ansible.builtin.set_fact:
+        joe_agent_config_path: "/tmp/joe-agent-test/stored"
+
+    - name: Create the fixture directory
+      ansible.builtin.file:
+        path: "{{ joe_agent_config_path }}"
+        state: directory
+        mode: "0700"
+
+    - name: "Case: {{ case.name }}"
+      ansible.builtin.include_tasks: run_stored_token_case.yml
+      loop: "{{ stored_token_cases }}"
+      loop_control:
+        loop_var: case
+        label: "{{ case.name }}"
+
+    - name: Remove the stored configuration
+      ansible.builtin.file:
+        path: "{{ joe_agent_config_path }}/.pgwatch-config"
+        state: absent
+
+    - name: An absent configuration reads as no token, not as an error
+      ansible.builtin.include_tasks: "{{ joe_agent_tasks }}/read_token.yml"
+
+    - name: Assert that an absent configuration yields an empty token
+      ansible.builtin.assert:
+        that:
+          - joe_agent_platform_token == ''
+        quiet: true
+
+- name: "Joe agent | the rendered configuration"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    joe_agent_template: "{{ playbook_dir }}/../../roles/joe-agent/templates/pgwatch-config.j2"
+    render_dir: "/tmp/joe-agent-test/render"
+    render_cases:
+      - name: "default"
+        token: "joe-token-abc"
+        signing_secret: "signing-secret-abc"
+        joe_url: "http://127.0.0.1:2400"
+        api_base_url: "https://postgres.ai/api/general"
+  tasks:
+    # The repository's own defaults, so this renders what a deploy renders.
+    - name: Include main variables
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../../vars/main.yml"
+
+    - name: Create the render directory
+      ansible.builtin.file:
+        path: "{{ render_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: "Render the agent configuration: {{ case.name }}"
+      ansible.builtin.include_tasks: run_render_case.yml
+      loop: "{{ render_cases }}"
+      loop_control:
+        loop_var: case
+        label: "{{ case.name }}"
+
+    - name: Read the render back
+      ansible.builtin.slurp:
+        src: "{{ render_dir }}/pgwatch-config-default"
+      register: rendered_raw
+
+    - name: "Set variable: rendered"
+      ansible.builtin.set_fact:
+        rendered: "{{ rendered_raw.content | b64decode }}"
+
+    - name: Assert that every key the agent reads is rendered unindented
+      ansible.builtin.assert:
+        that:
+          - rendered is search('(?m)^joe_token=joe-token-abc$')
+          - rendered is search('(?m)^joe_verify_token=signing-secret-abc$')
+          - rendered is search('(?m)^joe_url=http://127\.0\.0\.1:2400$')
+          - rendered is search('(?m)^api_base_url=https://postgres\.ai/api/general$')
+        fail_msg: >-
+          A key is missing or indented. The agent's parser reads unindented 'key=value' only, so an
+          indented line is not the value it looks like - it is no value at all.
+        quiet: true
+
+    # One container serves one channel: an agent whose configuration names both a
+    # Joe and a DBLab engine, or a monitoring instance, is reported as a fault and
+    # serves neither.
+    - name: Assert that the file names one channel and nothing else
+      ansible.builtin.assert:
+        that:
+          - rendered is not search('(?m)^instance_id=')
+          - rendered is not search('(?m)^dblab_')
+          - rendered is not search('(?m)^api_key=')
+          - settings | length == 4
+        fail_msg: >-
+          The rendered configuration carries {{ settings | length }} settings ({{ settings | join(', ') }}).
+          The Joe channel's four are the whole file: a key belonging to another channel makes the
+          agent report a fault and serve neither.
+        quiet: true
+      vars:
+        settings: "{{ rendered | regex_findall('(?m)^([a-z_]+)=') }}"
+
+    - name: Remove the temporary directory
+      ansible.builtin.file:
+        path: "/tmp/joe-agent-test"
+        state: absent
+
+- name: "Joe agent | what the role does, and what it must not do"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    role_dir: "{{ playbook_dir }}/../../roles/joe-agent"
+  tasks:
+    - name: Read the role's task list
+      ansible.builtin.slurp:
+        src: "{{ role_dir }}/tasks/main.yml"
+      register: role_tasks_raw
+
+    - name: Read the role's preflight
+      ansible.builtin.slurp:
+        src: "{{ role_dir }}/tasks/preflight.yml"
+      register: role_preflight_raw
+
+    - name: "Set variable: role_tasks"
+      ansible.builtin.set_fact:
+        role_tasks: "{{ role_tasks_raw.content | b64decode | from_yaml }}"
+        role_text: "{{ (role_tasks_raw.content | b64decode) ~ (role_preflight_raw.content | b64decode) }}"
+
+    # Matched on 'register' and on the module key, never on a task name: a name is
+    # a comment, and a test that reads one keeps passing after the task it names
+    # has stopped doing anything.
+    - name: "Set variable: config_task"
+      ansible.builtin.set_fact:
+        config_task: "{{ role_tasks | selectattr('register', 'defined') |
+                         selectattr('register', 'eq', 'joe_agent_config_written') | list }}"
+
+    - name: "Set variable: container_task"
+      ansible.builtin.set_fact:
+        container_task: "{{ container_task | default([]) + [item] }}"
+      loop: "{{ role_tasks }}"
+      when: "'community.docker.docker_container' in item"
+      loop_control:
+        label: "{{ item.name | default('') }}"
+
+    # '.pgwatch-config' is bind-mounted as a single FILE, so the container keeps
+    # reading the inode it had at start, and 'template' replaces the file rather
+    # than rewriting it. Without the restart, a token or address change reports
+    # 'changed' and never reaches the running agent.
+    - name: Assert that the agent container is restarted when '.pgwatch-config' changes
+      ansible.builtin.assert:
+        that:
+          - config_task | length == 1
+          - (container_task | default([])) | length == 1
+          - "'/.pgwatch-config:/app/.pgwatch-config' in (container_spec.volumes | join(' '))"
+          - container_spec.restart is defined
+          - "'joe_agent_config_written is changed' in container_spec.restart"
+        fail_msg: >-
+          The agent container is not restarted when its '.pgwatch-config' changes. A single-file
+          bind mount resolves to an inode at container start, so without it a token or address
+          change reports 'changed' and never reaches the running agent.
+        quiet: true
+      vars:
+        container_spec: "{{ (container_task | default([{}]))[0]['community.docker.docker_container'] | default({}) }}"
+
+    # Two agents on one server: this one's container, configuration, and limits
+    # have to be its own. A copy of the DBLab agent's role that kept one
+    # 'dblab_agent_*' variable would take over that container instead.
+    - name: Assert that the container is this role's own, not the DBLab agent's
+      ansible.builtin.assert:
+        that:
+          - container_spec.name is search('joe_agent_container_name')
+          - container_spec.image is search('joe_agent_image')
+          - container_spec.cpus is search('joe_agent_cpus')
+          - container_spec.memory is search('joe_agent_memory')
+          - "'joe_agent_config_path' in (container_spec.volumes | join(' '))"
+          - "'dblab_agent' not in (container_spec | to_json)"
+        fail_msg: >-
+          The container specification names something other than this role's own variables. Two
+          agents run side by side on one server, so a 'dblab_agent_*' variable left here would have
+          this role take over the DBLab agent's container, configuration or budget.
+        quiet: true
+      vars:
+        container_spec: "{{ (container_task | default([{}]))[0]['community.docker.docker_container'] | default({}) }}"
+
+    # This role enrols this Joe and runs one container - and nothing else. The
+    # DBLab engine's configuration and lifecycle, and the DBLab agent's, belong to
+    # other roles. The positive clauses are the control: without them a misspelled
+    # path would read an empty file and every 'not search' below would pass.
+    - name: Assert that the role touches nothing but its own registration and container
+      ansible.builtin.assert:
+        that:
+          - role_text is search('community\.docker\.docker_container')
+          - role_text is search('joe_agent_config_written')
+          - role_text is search('rpc/joe_instance_register')
+          - role_text is not search('rpc/dblab')
+          - role_text is not search('dblab_engine_config_path')
+          - role_text is not search('(?m)^\s*notify:')
+        fail_msg: >-
+          The role does more than enrol this Joe and run the agent. It must register through
+          v1.joe_instance_register and nothing else; the DBLab engine's configuration and restarts
+          belong to the 'dblab-engine' and 'dblab-agent' roles, not to this one.
+        quiet: true
+
+    # Matched on the module key and its value, and on 'register', never on a task
+    # name. Indexes rather than presence: the ORDER is the whole point.
+    - name: "Set variable: flush_indexes"
+      ansible.builtin.set_fact:
+        flush_indexes: "{{ flush_indexes | default([]) + [idx] }}"
+      loop: "{{ role_tasks }}"
+      when:
+        - "'ansible.builtin.meta' in item"
+        - item['ansible.builtin.meta'] == 'flush_handlers'
+      loop_control:
+        index_var: idx
+        label: "{{ item.name | default('') }}"
+
+    - name: "Set variable: health_indexes"
+      ansible.builtin.set_fact:
+        health_indexes: "{{ health_indexes | default([]) + [idx] }}"
+      loop: "{{ role_tasks }}"
+      when: (item.register | default('')) == 'joe_agent_joe_health'
+      loop_control:
+        index_var: idx
+        label: "{{ item.name | default('') }}"
+
+    # 'joe-bot' bind-mounts Joe's config DIRECTORY, so a re-rendered joe.yml leaves
+    # the container spec untouched and the running Joe keeps its old configuration;
+    # only that role's 'restart joe' handler reloads it, at end of play. Asking the
+    # stale Joe what it serves fails the check, discards the pending restart, and
+    # the next run re-renders nothing - so it never notifies again and the box
+    # stays stuck. Ungated on purpose: 'dblab-engine' and 'dblab-agent' both flush
+    # their own handlers and both run before 'joe-bot', so 'restart joe' is the
+    # only one that can still be pending here.
+    - name: Assert that a pending Joe restart is flushed before Joe is asked what it serves
+      ansible.builtin.assert:
+        that:
+          - (flush_indexes | default([])) | length == 1
+          - (health_indexes | default([])) | length == 1
+          - (flush_indexes | default([]))[0] | int < (health_indexes | default([]))[0] | int
+          - role_tasks[(flush_indexes | default([]))[0] | int].when is not defined
+        fail_msg: >-
+          The role does not flush handlers before it reads what Joe reports about itself. A
+          re-rendered joe.yml does not restart Joe by itself - 'joe-bot' mounts the config
+          directory and reloads it through a handler at end of play - so without the flush this
+          role interrogates a Joe still running its old configuration, and a run that switches
+          'joe_communication_type' to 'webui' fails on the Joe it just reconfigured and discards
+          the restart that would have fixed it.
+        quiet: true
+
+    # The register call itself, matched on the module and its arguments rather
+    # than on a task name. 'mint_token' is the load-bearing one: the Platform
+    # defaults it OFF, so a call that omits it is answered 'not_requested' and the
+    # box never gets a credential.
+    - name: "Set variable: register_task"
+      ansible.builtin.set_fact:
+        register_task: "{{ register_task | default([]) + [item] }}"
+      loop: "{{ role_tasks }}"
+      when:
+        - "'ansible.builtin.uri' in item"
+        - "(item['ansible.builtin.uri'].method | default('GET')) == 'POST'"
+      loop_control:
+        label: "{{ item.name | default('') }}"
+
+    - name: Assert that registration asks for a token, with the organization's key
+      ansible.builtin.assert:
+        that:
+          - (register_task | default([])) | length == 1
+          - register_spec.url is search('rpc/joe_instance_register')
+          - register_spec.headers['Org-Key'] is search('platform_org_key')
+          - register_spec.body.mint_token | bool
+          - register_spec.body.selfassigned_instance_id is search('joe_agent_instance_id')
+          # A task keyword, so it sits on the task and not on the module's arguments.
+          - (register_task | default([{}]))[0].no_log | default(false) | bool
+        fail_msg: >-
+          The registration call does not ask for a token with the organization's key. 'mint_token'
+          is defaulted OFF on the Platform, so a call that omits it is answered 'not_requested' and
+          this box never gets a credential; and the reply carries the token in plaintext, so the
+          task has to be no_log.
+        quiet: true
+      vars:
+        register_spec: "{{ (register_task | default([{}]))[0]['ansible.builtin.uri'] | default({}) }}"
+
+    - name: "Set variable: joe_addresses"
+      ansible.builtin.set_fact:
+        joe_addresses: "{{ joe_addresses | default([]) +
+                           [(item['ansible.builtin.wait_for'] | default({}, true)).host | default('')] +
+                           [(item['ansible.builtin.uri'] | default({}, true)).url | default('')] }}"
+      # A task nested in a 'block' is not a top-level item, so both levels are walked.
+      loop: "{{ (role_tasks | subelements('block', skip_missing=True) | map(attribute=1) | list) + role_tasks }}"
+      when: "'ansible.builtin.wait_for' in item or 'ansible.builtin.uri' in item"
+      loop_control:
+        label: "{{ item.name | default('') }}"
+
+    # 'localhost' resolves to '::1' first on a dual-stack host, and Joe publishes
+    # on 'joe_container_host' only, so the wait would burn the whole timeout and
+    # then fail. The Joe address the agent is handed is built from that same
+    # variable.
+    - name: Assert that Joe is addressed by its variable, not by the name 'localhost'
+      ansible.builtin.assert:
+        that:
+          - (joe_addresses | default([])) | select('search', 'localhost') | list | length == 0
+          - (joe_addresses | default([])) | select('search', 'joe_container_host') | list | length == 1
+          - (joe_addresses | default([])) | select('search', 'joe_agent_joe_url') | list | length == 1
+        fail_msg: >-
+          A task in the role addresses Joe as 'localhost'. Use 'joe_container_host', the address Joe
+          actually publishes on and the one 'joe_agent_joe_url' is built from.
+        quiet: true
+
+...

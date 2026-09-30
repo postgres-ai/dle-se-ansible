@@ -1,0 +1,19 @@
+---
+
+- name: "Write the fixture: {{ case.name }}"
+  ansible.builtin.copy:
+    content: "{{ case.content }}"
+    dest: "{{ joe_agent_config_path }}/.pgwatch-config"
+    mode: "0600"
+
+- name: Read the stored token
+  ansible.builtin.include_tasks: "{{ joe_agent_tasks }}/read_token.yml"
+
+- name: "Assert the stored token: {{ case.name }}"
+  ansible.builtin.assert:
+    that:
+      - joe_agent_platform_token == case.expect
+    fail_msg: "{{ case.name }}: expected '{{ case.expect }}', got '{{ joe_agent_platform_token }}'"
+    quiet: true
+
+...

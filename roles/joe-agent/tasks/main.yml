@@ -1,0 +1,187 @@
+---
+
+# Installs the agent that makes the Joe on this server call the Platform instead
+# of waiting to be called. Gated on 'joe_agent_install' and tagged 'joe-agent':
+# with the flag off nothing here runs, and '--tags joe-agent' switches an
+# already-installed server without reinstalling or restarting Joe or the engine.
+#
+# The role enrols this Joe with the Platform and then runs the agent. It never
+# touches another service's configuration: the DBLab engine, the DBLab agent and
+# Joe itself all belong to other roles.
+
+- name: Preflight checks for the Joe agent
+  ansible.builtin.include_tasks: preflight.yml
+
+# The 'joe-bot' role bind-mounts Joe's config DIRECTORY, so a re-rendered joe.yml
+# leaves the container spec untouched and the running Joe keeps its old
+# configuration: only that role's 'restart joe' handler reloads it, at end of
+# play. Without this flush, a run that switches 'joe_communication_type' to
+# 'webui' asks the still-Slack Joe what it serves, fails the check below, and
+# discards the pending restart - and the next run re-renders nothing, so it never
+# notifies again and the box stays stuck until Joe is restarted by hand.
+#
+# Ungated, unlike the DBLab agent's flush, and safe to be: 'dblab-engine' flushes
+# its own handler unconditionally and 'dblab-agent' flushes its own when it
+# notified one, and both roles run BEFORE 'joe-bot', so 'restart joe' is the only
+# handler that can still be pending here. Flushing is not touching another
+# service's configuration: it lets that service's own role act at the moment this
+# one depends on.
+- name: Make sure Joe has loaded its configuration before it is asked what it serves
+  ansible.builtin.meta: flush_handlers
+
+# Needed on a switch, where the 'joe-bot' role is tagged out and nothing else has
+# waited for Joe. On a fresh install Joe is already up and this returns
+# immediately. Addressed by 'joe_container_host' and not by the name 'localhost':
+# that name resolves to '::1' first on a dual-stack host. It is the address
+# 'joe_agent_joe_url' hands to the agent, so this checks what the agent uses.
+#
+# Rescued because Joe is optional on this server, unlike the engine: the likely
+# reason for a timeout here is that there is no Joe to serve, and a bare
+# 'wait_for' would report only that a port did not open.
+- name: Wait for Joe's API port to be available
+  block:
+    - name: Wait for the Joe API port to be available
+      ansible.builtin.wait_for:
+        port: "{{ joe_port }}"
+        host: "{{ joe_container_host }}"
+        state: started
+        timeout: "{{ joe_agent_joe_start_timeout }}"
+  rescue:
+    - name: Report that no Joe is listening
+      ansible.builtin.fail:
+        msg: >-
+          Nothing is listening on {{ joe_container_host }}:{{ joe_port }}, so there is no Joe on
+          this server for the agent to serve. Install Joe first ('joe_bot_install'), or point
+          'joe_agent_joe_url' at the Joe this agent is meant to serve.
+
+# The authoritative check that Joe serves a '/webui/' surface, and the one that
+# also covers a supplied 'joe_config_file' the preflight cannot read. Joe's root
+# path answers with the communication types it actually started, so this is the
+# running service's own account of itself rather than a guess from a variable.
+#
+# 'failed_when: false' so the retries are exhausted without the module having the
+# last word. A Joe whose port is open but whose HTTP is broken - a TLS or proxy
+# error - otherwise dies here with a bare 'Status code was -1 and not [200]', and
+# the assert below, which is where all the guidance is, never runs. The status is
+# checked there instead.
+- name: Read what Joe reports about itself
+  ansible.builtin.uri:
+    url: "{{ joe_agent_joe_url | regex_replace('/+$', '') }}/"
+  register: joe_agent_joe_health
+  until: joe_agent_joe_health.status == 200
+  retries: 6
+  delay: 10
+  failed_when: false
+  changed_when: false
+
+- name: Ensure the Joe on this server serves the '/webui/' surface the agent calls
+  ansible.builtin.assert:
+    that:
+      - joe_agent_joe_health.status | default(-1) | int == 200
+      - "'webui' in (joe_agent_joe_health.json.communication_types | default([]))"
+    fail_msg: >-
+      Joe at {{ joe_agent_joe_url }} did not answer with the '/webui/' surface the agent calls.
+      It replied HTTP {{ joe_agent_joe_health.status | default('none') }}
+      {{ joe_agent_joe_health.msg | default('') }}
+      and reported communication types
+      {{ joe_agent_joe_health.json.communication_types | default([]) | join(', ') | default('none', true) }},
+      which do not include 'webui'. Joe registers its HTTP handlers per communication type, so a
+      Joe without one serves no '/webui/' path - and that is the only surface the agent can hand a
+      command to. Check that {{ joe_agent_joe_url }} reaches this server's Joe, then give that Joe
+      a 'webui' communication type, or leave 'joe_agent_install' off and keep it on the pull model.
+    quiet: true
+
+# Before anything renders a config from it. 'existing' returns no token, so the
+# one already on this box is the only thing that makes such a re-run succeed.
+- name: Read the Joe agent's stored Platform access token
+  ansible.builtin.include_tasks: read_token.yml
+
+# The id this box is recognised by on its next boot. Its own file so a fixture can
+# drive it (tests/joe-agent/).
+- name: Read the instance ID this box registers under
+  ansible.builtin.include_tasks: read_instance_id.yml
+
+# Always asks. 'mint_token' is defaulted OFF on the Platform - a box that called
+# this on every boot and discarded the reply would otherwise spend its one mint on
+# a caller that cannot keep it - so a call that does not ask is answered
+# 'not_requested', which this playbook treats as a fault since it always asks.
+#
+# Trailing slash normalised the same way the Joe address is above: a
+# 'platform_url' ending in '/' would otherwise build '…/general//rpc/…', and a
+# Platform that 404s that is reported below as one with no
+# v1.joe_instance_register - telling the operator to upgrade something already
+# current.
+- name: Register this Joe instance with the Platform
+  ansible.builtin.uri:
+    url: "{{ joe_agent_api_base_url | regex_replace('/+$', '') }}/rpc/joe_instance_register"
+    method: POST
+    headers:
+      Org-Key: "{{ platform_org_key }}"
+      Accept: "application/json"
+    body_format: json
+    body:
+      selfassigned_instance_id: "{{ joe_agent_instance_id }}"
+      project_name: "{{ platform_project_name }}"
+      mint_token: true
+    return_content: true
+    timeout: 60
+  register: joe_agent_register
+  no_log: true  # the reply carries the Platform access token
+  failed_when: false
+  changed_when: false
+
+- name: Act on the registration reply
+  ansible.builtin.include_tasks: handle_registration.yml
+
+- name: Create the Joe agent configuration directory
+  ansible.builtin.file:
+    dest: "{{ joe_agent_config_path }}"
+    state: directory
+    owner: "{{ joe_agent_uid }}"
+    group: "{{ joe_agent_gid }}"
+    mode: "0700"
+
+# 0600 and owned by the uid the container runs as. Anything else and the agent
+# reports "config unreadable; check its owner and mode" and idles. Its own
+# directory, never the DBLab agent's: two containers, two files, one channel each.
+- name: Generate the Joe agent configuration '{{ joe_agent_config_path }}/.pgwatch-config'
+  ansible.builtin.template:
+    src: templates/pgwatch-config.j2
+    dest: "{{ joe_agent_config_path }}/.pgwatch-config"
+    owner: "{{ joe_agent_uid }}"
+    group: "{{ joe_agent_gid }}"
+    mode: "0600"
+  register: joe_agent_config_written
+  diff: false  # the file is a credential
+
+# Host networking: Joe listens on loopback only, and the agent has no inbound port
+# of its own, so nothing is exposed by it and nothing collides with the DBLab
+# agent that may be running beside it. The health file the agent writes lives on
+# this container's own '/tmp' tmpfs, so that does not collide either.
+- name: Ensure that the Joe agent container is running
+  community.docker.docker_container:
+    name: "{{ joe_agent_container_name }}"
+    image: "{{ joe_agent_image }}"
+    state: started
+    restart_policy: unless-stopped
+    container_default_behavior: "compatibility"
+    network_mode: host
+    user: "{{ joe_agent_uid }}:{{ joe_agent_gid }}"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opts:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:noexec,nosuid,nodev,size=16m
+    cpus: "{{ joe_agent_cpus }}"
+    memory: "{{ joe_agent_memory }}"
+    # The mount below is a single FILE, so it resolves to the inode the file had
+    # when the container started, and 'template' replaces the file rather than
+    # rewriting it. Without this a re-run that changes the token or an address
+    # reports 'changed' and the running agent keeps reading the old one.
+    restart: "{{ joe_agent_config_written is changed }}"
+    volumes:
+      - "{{ joe_agent_config_path }}/.pgwatch-config:/app/.pgwatch-config:ro"
+
+...
