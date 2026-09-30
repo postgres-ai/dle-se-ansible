@@ -1,0 +1,41 @@
+---
+
+# One preflight case. Every variable the preflight reads is set here, so a case
+# states only what it is testing and the rest is a working install: a case that
+# left them unset would pass on the wrong assertion.
+- name: Reset the case state
+  ansible.builtin.set_fact:
+    joe_agent_api_base_url: "{{ case.api_base_url | default('https://postgres.ai/api/general') }}"
+    joe_agent_joe_url: "{{ case.joe_url | default('http://127.0.0.1:2400') }}"
+    joe_agent_signing_secret: "{{ case.signing_secret | default('signing-secret-abc') }}"
+    joe_communication_type: "{{ case.communication_type | default('webui') }}"
+    joe_agent_config_path: "{{ case.config_path | default('/root/.dblab/joe-agent') }}"
+    dblab_agent_config_path: "{{ case.dblab_config_path | default('/root/.dblab/agent') }}"
+    # An empty string is what the preflight treats as 'not supplied', the same way
+    # the 'joe-bot' role does, so one variable covers both states.
+    joe_config_file: "{{ case.config_file | default('') }}"
+    # Named only in the supplied-configuration warning, but set here for the same
+    # reason as the rest: a case must state what it tests and nothing else.
+    joe_config_path: "{{ case.joe_config_path | default('/root/.dblab/joe/configs') }}"
+    case_failed: false
+    case_failure_message: ""
+
+- name: Run the preflight
+  block:
+    - name: Preflight checks for the Joe agent
+      ansible.builtin.include_tasks: "{{ joe_agent_tasks }}/preflight.yml"
+  rescue:
+    - name: Record the failure
+      ansible.builtin.set_fact:
+        case_failed: true
+        case_failure_message: "{{ ansible_failed_result.msg | default('') }}"
+
+- name: "Assert the outcome: {{ case.name }}"
+  ansible.builtin.assert:
+    that:
+      - case_failed == (case.expect_failure | length > 0)
+      - (case.expect_failure | length < 1) or (case.expect_failure in case_failure_message)
+    fail_msg: "{{ case.name }}: failed={{ case_failed }}, message='{{ case_failure_message }}'"
+    quiet: true
+
+...

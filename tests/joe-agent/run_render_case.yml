@@ -1,0 +1,16 @@
+---
+
+- name: "Set variables for the render case: {{ case.name }}"
+  ansible.builtin.set_fact:
+    joe_agent_platform_token: "{{ case.token }}"
+    joe_agent_signing_secret: "{{ case.signing_secret }}"
+    joe_agent_joe_url: "{{ case.joe_url }}"
+    joe_agent_api_base_url: "{{ case.api_base_url }}"
+
+- name: "Render the agent configuration: {{ case.name }}"
+  ansible.builtin.template:
+    src: "{{ joe_agent_template }}"
+    dest: "{{ render_dir }}/pgwatch-config-{{ case.name }}"
+    mode: "0600"
+
+...

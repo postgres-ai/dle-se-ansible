@@ -1,0 +1,31 @@
+---
+
+- name: Reset the case state
+  ansible.builtin.set_fact:
+    joe_agent_register: "{{ case.reply }}"
+    joe_agent_platform_token: "{{ case.stored_token }}"
+    case_failed: false
+    case_failure_message: ""
+
+- name: Run the registration branch
+  block:
+    - name: Act on the registration reply
+      ansible.builtin.include_tasks: "{{ joe_agent_tasks }}/handle_registration.yml"
+  rescue:
+    - name: Record the failure
+      ansible.builtin.set_fact:
+        case_failed: true
+        case_failure_message: "{{ ansible_failed_result.msg | default('') }}"
+
+- name: "Assert the outcome: {{ case.name }}"
+  ansible.builtin.assert:
+    that:
+      - case_failed == (case.expect_failure is defined)
+      - (case.expect_failure is not defined) or (case.expect_failure in case_failure_message)
+      - (case.expect_token is not defined) or (joe_agent_platform_token == case.expect_token)
+    fail_msg: >-
+      {{ case.name }}: failed={{ case_failed }}, message='{{ case_failure_message }}',
+      token='{{ joe_agent_platform_token }}'
+    quiet: true
+
+...

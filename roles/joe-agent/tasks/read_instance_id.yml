@@ -1,0 +1,53 @@
+---
+
+# The id this box is recognised by on its next boot. The DBLab engine assigns
+# itself one on first boot and this reuses it, so a box has ONE identity: Joe's
+# registration finds-or-creates on it in 'joe_instances', a different table from
+# the engine's, so the two never collide. It is NEVER written here: the engine's
+# own reader does not trim, so a file written by 'echo' or 'lineinfile' would make
+# the engine register '<id>\n' as a second DBLab instance.
+#
+# Stat first: reachable through '--tags joe-agent', which tags out 'dblab-engine',
+# so the engine can be installed but never have completed a first boot. A bare
+# slurp reports 'failed to find <path>' and says nothing about the engine, in a
+# role that rescues even the 'wait_for'.
+- name: Check whether the DBLab Engine has assigned itself an instance ID
+  ansible.builtin.stat:
+    path: "{{ joe_agent_instance_id_file }}"
+  register: joe_agent_instance_id_stat
+
+- name: Ensure the DBLab Engine has assigned itself an instance ID
+  ansible.builtin.assert:
+    that:
+      - joe_agent_instance_id_stat.stat.exists
+    fail_msg: >-
+      '{{ joe_agent_instance_id_file }}' does not exist, so the DBLab Engine on this server has not
+      assigned itself an instance id yet and there is no identity to register this Joe under. Start
+      the engine and let it complete one boot, then re-run with --tags joe-agent.
+    quiet: true
+
+- name: Read the instance ID the DBLab Engine assigned itself
+  ansible.builtin.slurp:
+    src: "{{ joe_agent_instance_id_file }}"
+  register: joe_agent_instance_id_slurp
+
+- name: "Set variable: joe_agent_instance_id"
+  ansible.builtin.set_fact:
+    joe_agent_instance_id: "{{ joe_agent_instance_id_slurp.content | b64decode }}"
+
+# v1.joe_instance_register stores the id verbatim and only trims it to decide
+# whether it is empty, so registering a value with a newline on it would create a
+# second Joe instance that no trimmed call ever finds again.
+- name: Ensure the instance ID carries no surrounding whitespace
+  ansible.builtin.assert:
+    that:
+      - joe_agent_instance_id | length > 0
+      - joe_agent_instance_id == joe_agent_instance_id | trim
+    fail_msg: >-
+      '{{ joe_agent_instance_id_file }}' is empty or carries surrounding whitespace. The Platform
+      stores this id verbatim, so registering the trimmed value here would create a second,
+      separate Joe instance. Rewrite the file with the exact id and no trailing newline, restart
+      the engine, then re-run.
+    quiet: true
+
+...

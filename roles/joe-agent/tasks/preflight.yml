@@ -1,0 +1,202 @@
+---
+
+# Everything decidable before anything is touched. The agent refuses an address
+# it cannot verify, says so once on its first call and then goes quiet, so a bad
+# address has to be caught here rather than left to be discovered in a log.
+
+# Every value rendered into '.pgwatch-config' is written as one 'key=value' line.
+# A newline inside any of them is not quoted away: it ends that line early and the
+# remainder is read as a further setting. The parser takes the FIRST occurrence of
+# a key, so a newline in 'joe_agent_joe_url' - rendered on the line above
+# 'api_base_url' - silently replaces the Platform address the agent polls, and one
+# carrying a 'dblab_' or 'instance_id' key makes the agent see two channels and
+# idle unhealthy.
+#
+# FIRST, ahead of every 'urlsplit' below, because the URL checks cannot stand in
+# for this one and cannot even be reached in one of the two cases:
+#
+#   - 'http://127.0.0.1\ninstance_id=x' - urlsplit STRIPS '\r\n', so the host
+#     becomes '127.0.0.1instance_id=x' with an empty path and every URL clause
+#     passes. The asserts validate a different string than 'template' renders.
+#   - 'http://127.0.0.1:2400\ninstance_id=x' - the newline lands in the port, and
+#     urlsplit raises 'Port could not be cast to integer value' from the set_fact
+#     itself. Safe, but the operator is shown a filter-plugin error.
+#
+# Checking the raw strings before anything derives from them gives one clear
+# refusal for both.
+- name: Ensure every value rendered into the agent's configuration is a single line
+  ansible.builtin.assert:
+    that:
+      - _joe_agent_multiline_vars | length == 0
+    fail_msg: >-
+      {{ _joe_agent_multiline_vars | join(', ') }} carries a line break, so it is not one line. The
+      agent's configuration is 'key=value' lines: a value with a line break in it ends its own line
+      early and the rest is read as another setting, which can replace the Platform address the
+      agent polls or make it see a second channel and idle.
+    quiet: true
+  vars:
+    # One of these is a secret, so the offender is reported by NAME and the values
+    # never reach the message. That is also why this task is not 'no_log': the
+    # message has to be readable, and it carries no value.
+    _joe_agent_rendered_vars:
+      joe_agent_signing_secret: "{{ joe_agent_signing_secret }}"
+      joe_agent_joe_url: "{{ joe_agent_joe_url }}"
+      joe_agent_api_base_url: "{{ joe_agent_api_base_url }}"
+    # A folded scalar, not a quoted one: YAML turns '\r\n' inside double quotes
+    # into the characters themselves, which would leave the pattern working only by
+    # accident.
+    _joe_agent_multiline_vars: >-
+      {{ _joe_agent_rendered_vars | dict2items
+         | selectattr('value', 'search', '[\r\n]')
+         | map(attribute='key') | list }}
+
+- name: "Set variable: _joe_agent_api_url_parts"
+  ansible.builtin.set_fact:
+    _joe_agent_api_url_scheme: "{{ joe_agent_api_base_url | urlsplit('scheme') }}"
+    _joe_agent_api_url_host: "{{ joe_agent_api_base_url | urlsplit('hostname') | default('', true) }}"
+
+- name: Ensure the Platform address is a URL the agent can use
+  ansible.builtin.assert:
+    that:
+      - _joe_agent_api_url_host | length > 0
+      - _joe_agent_api_url_scheme in ['http', 'https']
+    fail_msg: >-
+      platform_url ('{{ joe_agent_api_base_url }}') is not an http(s) address with a host.
+      The agent reports this as 'api_base_url is not a url' and then idles.
+    quiet: true
+
+# Loopback http is how a local rig runs, and is the only http the agent accepts:
+# the access token travels as a request header. The host has to BE loopback, not
+# merely start with it: 'match' anchors only at the start, so an unterminated
+# alternative would accept 'localhost.example.com' and send the token in
+# cleartext to a host someone else owns.
+- name: Ensure the Platform address is https unless the Platform is on this server
+  ansible.builtin.assert:
+    that:
+      - _joe_agent_api_url_scheme == 'https' or
+        _joe_agent_api_url_host is match('^(localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|::1)$')
+    fail_msg: >-
+      platform_url ('{{ joe_agent_api_base_url }}') is plain http against '{{ _joe_agent_api_url_host }}'.
+      The agent sends its access token to the Platform as a request header, so http is accepted
+      only when the Platform runs on this server itself (127.0.0.1, ::1 or localhost).
+      Use an https address.
+    quiet: true
+
+# Not fatal: a certificate may legitimately carry an IP SAN, and refusing to
+# install would be this playbook overruling a setup that works.
+- name: Warn when the Platform is addressed by IP over https
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: platform_url ('{{ joe_agent_api_base_url }}') addresses the Platform by IP address.
+      The agent will refuse the certificate unless that certificate lists the IP address itself
+      ("x509: ... doesn't contain any IP SANs"). Address the Platform by the name on its
+      certificate instead, and put the certificate authority file on this server.
+  when:
+    - _joe_agent_api_url_scheme == 'https'
+    - _joe_agent_api_url_host is match('^\d{1,3}(\.\d{1,3}){3}$') or ':' in _joe_agent_api_url_host
+
+- name: "Set variable: _joe_agent_joe_url_parts"
+  ansible.builtin.set_fact:
+    _joe_agent_joe_url_scheme: "{{ joe_agent_joe_url | urlsplit('scheme') }}"
+    _joe_agent_joe_url_host: "{{ joe_agent_joe_url | urlsplit('hostname') | default('', true) }}"
+    _joe_agent_joe_url_path: "{{ joe_agent_joe_url | urlsplit('path') }}"
+
+# A base address, nothing more: the agent appends Joe's own '/webui/' path to it,
+# so 'http://host:2400/webui' is requested as '/webui/webui/channels' and 404s on
+# every job. A trailing slash is tolerated - the agent trims it - but a path is
+# not. This is the ONLY guard against it: the agent's own configuration check
+# requires a parseable http(s) URL with a host and nothing more, so a doubled path
+# passes validation there and is only ever seen as a 404 with no explanation.
+- name: Ensure the Joe address is a base URL the agent can use
+  ansible.builtin.assert:
+    that:
+      - _joe_agent_joe_url_host | length > 0
+      - _joe_agent_joe_url_scheme in ['http', 'https']
+      - _joe_agent_joe_url_path in ['', '/']
+    fail_msg: >-
+      joe_agent_joe_url ('{{ joe_agent_joe_url }}') is not an http(s) base address with a host and
+      no path. The agent appends Joe's '/webui/' path itself, so anything after the port would be
+      prepended to it and every call would reach a path Joe serves nothing at.
+    quiet: true
+
+# A warning rather than a refusal: whether the agent itself accepts plain http to
+# a routable Joe is the agent's rule, not this playbook's. The exposure is real
+# either way - a command and its results are the query text and the plan.
+- name: Warn when Joe is addressed over plain http on another host
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: joe_agent_joe_url ('{{ joe_agent_joe_url }}') is plain http against
+      '{{ _joe_agent_joe_url_host }}', which is not this server. Query text, plans and the
+      request signature would cross the network in cleartext. Joe normally runs on the same
+      server as its agent, addressed over loopback.
+  when:
+    - _joe_agent_joe_url_scheme == 'http'
+    - not (_joe_agent_joe_url_host is match('^(localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|::1)$'))
+
+- name: Ensure the signing secret the agent presents to Joe is set
+  ansible.builtin.assert:
+    that:
+      - joe_agent_signing_secret | default('', true) | length > 0
+    fail_msg: >-
+      joe_agent_signing_secret is empty. The agent signs every call to Joe with it and Joe answers
+      an unsigned request with 403, so it has to be the secret Joe itself holds
+      (joe_communication_signing_secret).
+    quiet: true
+
+# One container, one channel, one file - and the agent enforces it by refusing a
+# configuration that names two: 'dblab_token and joe_token are both set; one box
+# serves one channel'. So pointing this agent at the DBLab agent's file does not
+# merge the two channels, it breaks BOTH containers: each reads the same file,
+# sees two channels and idles unhealthy. Refused here because the symptom appears
+# on the agent that was working before this role ran.
+- name: Ensure this agent's configuration is not the DBLab agent's
+  ansible.builtin.assert:
+    that:
+      - joe_agent_config_path | regex_replace('/+$', '') !=
+        dblab_agent_config_path | regex_replace('/+$', '')
+    fail_msg: >-
+      joe_agent_config_path is '{{ joe_agent_config_path }}', the same directory as
+      dblab_agent_config_path. The two agents cannot share one '.pgwatch-config': the agent refuses
+      a configuration naming two channels, so a shared file stops the DBLab agent as well as this
+      one. Give this agent a directory of its own.
+    quiet: true
+
+# The one incompatibility that cannot be configured away. Joe registers its HTTP
+# handlers per communication type, so a Joe configured for Slack alone serves no
+# '/webui/' path at all - and that is the only surface the agent has. Decided
+# here from the variables, the same way the 'joe-bot' role decides which
+# communication type to render, and only when the configuration is this
+# playbook's to render: a supplied 'joe_config_file' may declare anything, and is
+# checked against the running Joe in the main task list instead.
+- name: Ensure Joe is not configured for Slack alone
+  ansible.builtin.assert:
+    that:
+      - joe_communication_type | lower == 'webui'
+    fail_msg: >-
+      joe_communication_type is '{{ joe_communication_type }}', so Joe serves no '/webui/' surface -
+      and that is the only surface the agent can hand a command to. A Slack-only Joe cannot be run
+      in inverted mode: set joe_communication_type to 'webui', or leave joe_agent_install off and
+      keep this Joe on the pull model.
+    quiet: true
+  when: joe_config_file is not defined or joe_config_file | length < 1
+
+# The check above steps aside for a supplied 'joe_config_file' because the running
+# Joe is asked directly in the main task list. The signing secret has no such
+# second check anywhere: Joe holds whatever that file says, and a mismatch is
+# answered with 403 on every command - the root health endpoint answers 200
+# regardless, since it is registered outside the per-communication-type handlers.
+# So the one thing that cannot be verified is said out loud, the way the DBLab
+# agent does for a supplied engine configuration.
+- name: Warn that a supplied Joe configuration file must carry this signing secret
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: joe_config_file is set, so '{{ joe_config_path }}/joe.yml' is managed outside this
+      playbook and this playbook cannot tell which signing secret that Joe holds. The agent signs
+      every call with joe_agent_signing_secret (by default joe_communication_signing_secret), and
+      Joe answers a wrongly signed request with 403 on every command while still reporting healthy.
+      Make sure that file's webui signingSecret is the same value.
+  when:
+    - joe_config_file is defined
+    - joe_config_file | length > 0
+
+...

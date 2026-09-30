@@ -108,6 +108,53 @@ joe_communication_channels_project: "{{ platform_project_name }}" # Postgres.ai 
 joe_dblab_params_dbname: "postgres"
 joe_dblab_params_sslmode: "prefer"
 
+# Joe agent (inverted mode: the Joe on this server calls the Platform)
+# The same 'instance-jobs' image as the DBLab agent, run a second time with a Joe
+# configuration: it asks the Platform for Joe work and hands each command to the
+# Joe on this server over Joe's '/webui/' surface. Nothing dials in, so Joe needs
+# no public address and no open port. The two agents are independent - a server
+# can run either, both or neither.
+joe_agent_install: false  # do not install the agent by default; inverted mode is an explicit choice
+# One image serves both channels, so one version per server. Override to pin Joe's
+# agent to a different build than the DBLab agent's.
+# NOTE: there is no separate Joe image - the same 'instance-jobs' image serves
+# both channels, and no released tag carries the Joe channel yet: it arrives with
+# postgresai!445. Until a tag has it, set this to a build of that branch; an agent
+# without the channel reads no joe_token, idles and reports unhealthy.
+joe_agent_version: "{{ dblab_agent_version }}"
+joe_agent_image: "postgresai/instance-jobs:{{ joe_agent_version | replace('v', '') }}"
+joe_agent_container_name: joe_agent
+joe_agent_config_path: "{{ dblab_engine_base_path }}/joe-agent"  # holds '.pgwatch-config', the agent's only file
+# The agent image runs as its own unprivileged user (uid 1001). '.pgwatch-config' is 0600, so the
+# container has to BE that owner: a mismatch is reported as "config unreadable; check its owner and mode".
+joe_agent_uid: 1001
+joe_agent_gid: 1001
+# Set for this container rather than inherited from the DBLab agent's: the two run side by side and
+# are budgeted separately.
+joe_agent_cpus: 0.25
+joe_agent_memory: "256M"
+# Joe as the agent addresses it. The two run on the same server, so this is loopback and plain http
+# is the norm - the request never leaves the machine. A base address only: the agent appends Joe's
+# '/webui/' path itself.
+joe_agent_joe_url: "http://{{ joe_container_host }}:{{ joe_port }}"
+# The Platform the agent polls for Joe work. Kept identical to what Joe's own configuration renders,
+# so the two never disagree about which Platform this server belongs to.
+joe_agent_api_base_url: "{{ platform_url | default('https://postgres.ai/api/general') }}"
+# The id this box is recognised by on its next boot. The DBLab Engine assigns itself one on first
+# boot; reusing it gives the box ONE identity, and Joe's registration finds-or-creates on it in a
+# different table from the engine's, so the two never collide. Override only for a box whose Joe
+# must be a separate instance from its engine.
+joe_agent_instance_id_file: "{{ dblab_engine_meta_path }}/instance_id"
+# The secret the agent signs each call to Joe with. Joe answers an unsigned or wrongly signed
+# request with 403, so this has to be the secret Joe itself holds - by default the very same
+# variable Joe's own configuration is rendered from. Rendered into the agent's configuration as
+# 'joe_verify_token', which is named for symmetry with 'dblab_verify_token' and is the signing key
+# rather than anything the agent sends.
+joe_agent_signing_secret: "{{ joe_communication_signing_secret }}"
+# How long to wait for Joe's API port after starting. Joe is started by the 'joe-bot' role in the
+# same play, or was already running when this role is reached through '--tags joe-agent'.
+joe_agent_joe_start_timeout: 60
+
 # Monitoring
 
 # Netdata - https://github.com/netdata/netdata

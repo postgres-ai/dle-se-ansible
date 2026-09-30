@@ -110,6 +110,7 @@ Notes:
 
 - `platform_url` must be `https`, or `http` to a loopback address for a local rig: the access token travels as a request header. The playbook refuses to continue otherwise.
 - A certificate rarely carries an IP address, so address Postgres.ai by the name on its certificate and put the certificate authority file on the server. The playbook warns about an https address that is an IP; it does not refuse one.
+- **There is no way to supply the access token by hand, and that is deliberate.** Unlike the DBLab channel, which has an admin mint (`v1.dblab_instance_token_create`), Joe's token can only come from a registration that asked for one: enrolment is the mint's only caller. So this playbook takes no token variable — a value an operator cannot legitimately obtain is not an input — and if registration fails the install stops rather than falling back to anything.
 - The access token is minted on **first** registration only. Running the install again is safe: a server that already has access keeps it, and the playbook says so. To replace it, an organization admin has to revoke the server's access first.
 - One server serves one thing. Do not add a monitoring instance's `instance_id` to the agent's configuration file on a DBLab server.
 
@@ -146,6 +147,52 @@ Notes:
 | `joe_config_file` (optional) | Copy the specified Joe Bot configuration file instead of generating a new configuration file. | "" |
 
 Note: Joe Bot repository: https://gitlab.com/postgres-ai/joe
+
+#### Joe agent (the Joe on this server calls Postgres.ai):
+
+By default Joe waits to be called: Postgres.ai connects to `/webui/` on Joe's port, so Joe needs an address Postgres.ai can reach and an open port — even on a server whose engine has already been inverted with `dblab_agent_install`. Set `joe_agent_install` to `true` to install a second small agent beside Joe instead. It asks Postgres.ai for Joe work and hands each command to the Joe on this server over loopback, so Joe needs no public address and no open port.
+
+It is the same `instance-jobs` image as the DBLab agent, run a second time with a Joe configuration of its own. The two are independent: a server can run either, both or neither.
+
+The playbook enrols the Joe itself, the same way it enrols an inverted engine: it registers this box with Postgres.ai using the organization's `platform_org_key`, asks for a per-instance access token, and writes the token it is given into the agent's configuration. There is nothing to obtain by hand.
+
+| Variable | Description | Default value |
+|:---------|:------------|:-------------:|
+| `joe_agent_install` (optional) | Install the agent that makes this server's Joe call Postgres.ai. | `false` |
+| `joe_agent_instance_id_file` (optional) | The file holding the id this box registers under. The DBLab Engine assigns itself one on first boot and this reuses it, so the box has one identity. | `{{ dblab_engine_meta_path }}/instance_id` |
+| `joe_agent_version` (optional) | The agent version. There is no separate Joe image — the same image serves both channels — so this follows the DBLab agent's version by default. No released tag carries the Joe channel yet, so set this to a build that does. | `{{ dblab_agent_version }}` |
+| `joe_agent_image` (optional) | The agent container image. | `postgresai/instance-jobs:{{ joe_agent_version \| replace('v', '') }}` |
+| `joe_agent_container_name` (optional) | The agent container name. | `joe_agent` |
+| `joe_agent_config_path` (optional) | The directory holding this agent's `.pgwatch-config` file. Its own, not the DBLab agent's. | `{{ dblab_engine_base_path }}/joe-agent` |
+| `joe_agent_uid` `joe_agent_gid` (optional) | The user the agent container runs as, and the owner of its configuration file. The image's own unprivileged user. | `1001`, `1001` |
+| `joe_agent_cpus` (optional) | CPU limit for the agent container. Budgeted separately from the DBLab agent's. | `0.25` |
+| `joe_agent_memory` (optional) | Memory limit for the agent container. | `256M` |
+| `joe_agent_joe_url` (optional) | The Joe address the agent calls. Both run on this server, so this is loopback. A base address only — the agent appends `/webui/` itself. | `http://{{ joe_container_host }}:{{ joe_port }}` |
+| `joe_agent_api_base_url` (optional) | The Postgres.ai address the agent polls for Joe work. | `{{ platform_url }}` |
+| `joe_agent_signing_secret` (optional) | The secret the agent signs each call to Joe with. Must be the secret Joe itself holds. Written into the agent's configuration as `joe_verify_token`, which despite the name is the signing key and is never sent. | `{{ joe_communication_signing_secret }}` |
+| `joe_agent_joe_start_timeout` (optional) | How long to wait for Joe's API port before giving up. | `60` |
+
+Notes:
+
+- **A Slack-only Joe cannot be inverted.** Joe registers its HTTP handlers per communication type, so a Joe whose `joe_communication_type` is `slack`, `slackrtm` or `slacksm` serves no `/webui/` path at all — and `/webui/` is the only surface the agent can hand a command to. The playbook refuses to install the agent for such a Joe, both from the variable and from what the running Joe reports about itself, and says which it found. Give that Joe a `webui` communication type, or leave `joe_agent_install` off and keep it on the pull model.
+- `platform_url` must be `https`, or `http` to a loopback address for a local rig: the access token travels as a request header. The playbook refuses to continue otherwise.
+- Joe is expected on this same server. The playbook warns about a `joe_agent_joe_url` that is plain `http` to another host — a command and its results are the query text and the plan.
+- One container serves one channel, and the agent enforces it: a configuration naming two is refused with `one box serves one channel`. So the two agents on a server cannot share a `.pgwatch-config` — pointing this one at the DBLab agent's file does not merge the channels, it stops **both** containers. Each needs a directory of its own, and the playbook refuses an install where the two coincide.
+- `joe_agent_joe_url` must be a base address with no path. The agent appends `/webui/…` itself, so `http://host:2400/webui` is requested as `/webui/webui/channels` and answers 404 on every job. A trailing slash is fine; a path is not, and the agent's own check does not catch it — this playbook's refusal is the only guard.
+- **There is no way to supply the access token by hand, and that is deliberate.** Unlike the DBLab channel, which has an admin mint (`v1.dblab_instance_token_create`), Joe's token can only come from a registration that asked for one: enrolment is the mint's only caller. So this playbook takes no token variable — a value an operator cannot legitimately obtain is not an input — and if registration fails the install stops rather than falling back to anything.
+- The access token is minted on **first** registration only. Running the install again is safe: a server that already has access keeps the token it holds, and the playbook says so. To replace it, an organization admin has to revoke the server's access first (`v1.joe_instance_token_revoke`, which needs Admin or AllFeaturesUser in the organization) and then re-run this playbook — there is deliberately no way to mint a second token for a box that already has a live one.
+- A **first** registration into an organization with no owner is refused: a self-registered Joe instance has to be attributed to somebody. Set the organization owner, or create the instance through the console. Not a state an organization created through the product reaches.
+- If the registration is answered `foreign_org`, this box's instance id already belongs to an instance in a **different** organization. Nothing is revoked and no token is minted; check that `platform_org_key` is the right organization's.
+- **Inverting Joe does not by itself make Postgres.ai hand out Joe work.** The routing predicate is a Postgres.ai-side setting *and* a recent poll from this box's agent, and both halves are required:
+
+  ```sql
+  update public.platform_settings
+    set setting_value = 'true'
+    where lower(setting_name) = lower('app.settings.joe_jobs_enabled');
+  ```
+
+  So turning the flag on does nothing to an instance whose agent is not running, and turning it off returns every instance to being dialled — the flag alone is the rollback. The agent records its polls even while the channel is off, so an operator can see which boxes are ready before flipping it.
+- `app.settings.joe_job_claim_limit` is a Postgres.ai-side setting too, and **this playbook does not set it and neither should you from here**. It must never exceed the Joe worker pool in the agent running on the box: claim more than the pool and Postgres.ai's sweep marks the unstarted tail `failed` while the agent is still going to run it — which on this channel means the caller is told the command failed and Joe then runs their query anyway. If it has to be raised, the agent's pool moves first.
 
 
 #### Monitoring:
@@ -276,6 +323,25 @@ docker run --rm -it \
 ```
 
 The engine is neither reinstalled nor restarted; its configuration is left alone unless you also set `dblab_agent_set_engine_token`, and then it is reloaded with a `SIGHUP` rather than restarted. The switch takes effect when the agent makes its first call, so you can watch it happen. To undo it, stop the agent container and have an organization admin revoke the server's access; Postgres.ai goes back to connecting to the server on its own.
+
+#### Switch a Joe that is already installed to call Postgres.ai:
+
+The same idea, with the `joe-agent` tag. It leaves Joe and the engine alone, registers this Joe with Postgres.ai, installs a second agent beside them and starts it. Fill in the signing secret that Joe already holds; the access token is minted during registration.
+
+```bash
+docker run --rm -it \
+  -v $HOME/.ssh:/root/.ssh:ro \
+  -e ANSIBLE_SSH_ARGS="-F none" \
+  postgresai/dle-se-ansible:v1.1 \
+    ansible-playbook deploy_dle.yml --tags joe-agent --extra-vars \
+      "dblab_host='root@12.34.56.78' \
+      joe_agent_install='true' \
+      platform_org_key='***********' \
+      platform_project_name='dblab-server' \
+      joe_communication_signing_secret='existing-signing-secret'"
+```
+
+Neither Joe nor the engine is reinstalled or restarted, and no configuration but the new agent's own is written. Joe has to be running and serving a `webui` communication type: the playbook asks Joe what it serves and stops if `/webui/` is not among them. To undo the switch, stop the `joe_agent` container and have an organization admin revoke the server's access; Postgres.ai goes back to connecting to Joe on its own.
 
 #### Configure a dblab server after deployment:
 

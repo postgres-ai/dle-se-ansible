@@ -1,0 +1,127 @@
+---
+
+# Turns the registration reply into a usable token or a named failure. Its own
+# file so a stubbed reply can drive it (tests/joe-agent/).
+#
+#   minted        -> the plaintext rides this reply and is never sent again
+#   existing      -> a live token exists; success only if this box already holds it
+#   not_requested -> the Platform did not see mint_token, which we always send
+#   foreign_org   -> this Org-Key's organization does not own this instance
+#   404/PGRST202  -> the Platform has no v1.joe_instance_register yet
+#
+# THERE IS NO 'no_owner' STATUS HERE, and that is the deliberate difference from
+# the DBLab twin rather than an omission: public.joe_instances.created_by_user_id
+# is NOT NULL, so a registered Joe instance always names somebody, and a
+# self-registration into an ownerless organization is refused outright with PT400
+# instead. That refusal arrives through the non-200 branch below, which surfaces
+# the Platform's own detail. Do not add a 'no_owner' branch: a status the Platform
+# never sends reads as a state a caller should handle.
+
+# PostgREST maps an unknown function to 404, the same status a swept job gets,
+# so the body's 'code' is what discriminates - never the status alone.
+- name: Fail when the Platform cannot register a Joe instance yet
+  ansible.builtin.fail:
+    msg: >-
+      {{ joe_agent_api_base_url }}/rpc/joe_instance_register does not exist on this Platform.
+      Upgrade it before enrolling a Joe in inverted mode (platform-all#840), or, if that Platform
+      is already current, check that platform_url addresses its API root - a 404 from the wrong
+      address reads the same from here. (PostgREST answered
+      {{ joe_agent_register.status | default('no status') }}
+      {{ joe_agent_register.json.code | default('') }}.)
+  when:
+    - joe_agent_register.json.code | default('') == 'PGRST202'
+      or joe_agent_register.status | default(0) | int == 404
+
+# Carries the Platform's own 'detail', which is where the ownerless-organization
+# refusal and an unrecognised Org-Key both say what is wrong.
+- name: Fail when registration was refused
+  ansible.builtin.fail:
+    msg: >-
+      Registering this Joe instance with {{ joe_agent_api_base_url }} failed
+      (HTTP {{ joe_agent_register.status | default('none') }}).
+      {{ joe_agent_register.json.message | default(joe_agent_register.msg | default('')) }}
+      {{ joe_agent_register.json.details | default(joe_agent_register.json.detail | default('')) }}
+      {{ joe_agent_register.json.hint | default('') }}
+  when: joe_agent_register.status | default(0) | int != 200
+
+- name: "Set variable: joe_agent_register_status"
+  ansible.builtin.set_fact:
+    joe_agent_register_status: "{{ joe_agent_register.json.platform_access_token_status | default('', true) }}"
+
+- name: Fail on an access token status this playbook does not know
+  ansible.builtin.fail:
+    msg: >-
+      The Platform reported platform_access_token_status='{{ joe_agent_register_status }}',
+      which this playbook does not know how to act on. Nothing has been written. Upgrade
+      dle-se-ansible, or report this against platform-all#840.
+  when: joe_agent_register_status not in ['minted', 'existing', 'not_requested', 'foreign_org']
+
+- name: Fail when the Platform ignored the mint request
+  ansible.builtin.fail:
+    msg: >-
+      The Platform answered 'not_requested' although this install sent mint_token. That is
+      impossible against a Platform that reads the parameter, so something between here and
+      {{ joe_agent_api_base_url }} dropped it from the request body. Nothing has been written.
+  when: joe_agent_register_status == 'not_requested'
+
+# Registration itself succeeded and nothing was revoked: the id this box chose is
+# already taken by an instance in a different organization, and the Platform will
+# not hand this Org-Key a credential for it.
+- name: Fail when the instance belongs to another organization
+  ansible.builtin.fail:
+    msg: >-
+      The Platform answered 'foreign_org': Joe instance id '{{ joe_agent_instance_id | default('(unknown)') }}'
+      already exists in an organization other than the one this Org-Key belongs to, so no token was
+      minted for it and nothing was revoked. Check that platform_org_key is the right
+      organization's, and that this box's instance id is its own.
+  when: joe_agent_register_status == 'foreign_org'
+
+- name: Fail when a live token exists that this server does not hold
+  ansible.builtin.fail:
+    msg: >-
+      The Platform already has a live access token for Joe instance
+      '{{ joe_agent_instance_id | default('(unknown)') }}' and will not mint a second one,
+      but this server holds none ({{ joe_agent_config_path }}/.pgwatch-config).
+      An organization admin has to revoke the existing token first
+      (v1.joe_instance_token_revoke); then re-run with --tags joe-agent.
+  when:
+    - joe_agent_register_status == 'existing'
+    - joe_agent_platform_token | default('', true) | length < 1
+
+# The only branch that writes the token. 'existing' deliberately keeps the one
+# already on disk: a re-run must never put a null over a working config.
+- name: "Set variable: joe_agent_platform_token (minted by the Platform)"
+  ansible.builtin.set_fact:
+    joe_agent_platform_token: "{{ joe_agent_register.json.platform_access_token | default('', true) }}"
+  no_log: true
+  when: joe_agent_register_status == 'minted'
+
+- name: Ensure this server now has a Platform access token
+  ansible.builtin.assert:
+    that:
+      - joe_agent_platform_token | default('', true) | length > 0
+    fail_msg: >-
+      The Platform reported platform_access_token_status='{{ joe_agent_register_status }}'
+      but no usable token is available. Nothing has been written.
+    quiet: true
+
+# The token is rendered as the FIRST 'key=value' line, so a newline in it would put
+# the remainder above every other setting and win on a first-occurrence-wins parse.
+# It should never happen - the Platform mints this and nobody types it - but the
+# reader is asymmetric with the writer and that is what makes it worth a line:
+# read_token.yml matches '^joe_token=([^\r\n]*)', so a multi-line value would be
+# written whole on this run and read back truncated on the next, changing the
+# config, restarting the container and losing the box its Platform access with
+# nothing said. Named, never echoed: the value is the credential.
+- name: Ensure the Platform access token is a single line
+  ansible.builtin.assert:
+    that:
+      - joe_agent_platform_token is not search('[\r\n]')
+    fail_msg: >-
+      The access token the Platform returned carries a line break, so it cannot be written as one
+      'key=value' line: the rest of it would be read as further settings, and this role's own
+      reader would see a truncated token on the next run. Nothing has been written. Report this
+      against platform-all#840.
+    quiet: true
+
+...

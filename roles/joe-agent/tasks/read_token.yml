@@ -1,0 +1,33 @@
+---
+
+# Reads back the token this box already holds, before anything renders a config
+# from it. The mint is first-registration-only, so the agent's own config is the
+# only place it survives. An absent or tokenless file yields an empty string,
+# never an undefined variable: a re-run must not write a null over a working
+# config.
+
+- name: Check whether the Joe agent configuration already exists
+  ansible.builtin.stat:
+    path: "{{ joe_agent_config_path }}/.pgwatch-config"
+  register: joe_agent_config_stat
+
+- name: Read the stored Joe agent configuration
+  ansible.builtin.slurp:
+    src: "{{ joe_agent_config_path }}/.pgwatch-config"
+  register: joe_agent_config_slurp
+  no_log: true  # the file holds the Platform access token
+  when: joe_agent_config_stat.stat.exists
+
+# Matches the agent's own parser (instance-jobs/internal/config/config.go):
+# unindented 'key=value', the FIRST occurrence wins, the value is trimmed. A line
+# the agent would ignore must be ignored here too, or the two readers disagree
+# about which line is the credential.
+- name: "Set variable: joe_agent_platform_token (from the stored configuration)"
+  ansible.builtin.set_fact:
+    joe_agent_platform_token: "{{ (_joe_agent_stored_tokens | first | trim) if (_joe_agent_stored_tokens | length > 0) else '' }}"
+  vars:
+    _joe_agent_stored_content: "{{ (joe_agent_config_slurp.content | default('')) | b64decode }}"
+    _joe_agent_stored_tokens: "{{ _joe_agent_stored_content | regex_findall('(?m)^joe_token=([^\\r\\n]*)') }}"
+  no_log: true
+
+...
