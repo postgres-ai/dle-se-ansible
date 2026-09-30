@@ -14,16 +14,23 @@
 - name: Check whether the DBLab Engine has assigned itself an instance ID
   ansible.builtin.stat:
     path: "{{ joe_agent_instance_id_file }}"
+    follow: true
   register: joe_agent_instance_id_stat
 
+# 'isreg' as well as 'exists', and 'follow: true' on the stat above: without both,
+# a dangling symlink and a directory each report exists=true, pass this assert and
+# then die in the slurp - which is the bare module error this check exists to
+# replace.
 - name: Ensure the DBLab Engine has assigned itself an instance ID
   ansible.builtin.assert:
     that:
       - joe_agent_instance_id_stat.stat.exists
+      - joe_agent_instance_id_stat.stat.isreg | default(false)
     fail_msg: >-
-      '{{ joe_agent_instance_id_file }}' does not exist, so the DBLab Engine on this server has not
-      assigned itself an instance id yet and there is no identity to register this Joe under. Start
-      the engine and let it complete one boot, then re-run with --tags joe-agent.
+      '{{ joe_agent_instance_id_file }}' is not a readable file, so the DBLab Engine on this server
+      has not assigned itself an instance id yet and there is no identity to register this Joe
+      under. Start the engine and let it complete one boot, then re-run with --tags joe-agent.
+      (Exists: {{ joe_agent_instance_id_stat.stat.exists }}.)
     quiet: true
 
 - name: Read the instance ID the DBLab Engine assigned itself
