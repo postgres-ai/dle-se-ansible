@@ -1,12 +1,17 @@
 ---
 
-# A case that states no 'content' is the engine-never-booted case: the file does
-# not exist at all, which is a different branch from an empty one.
-- name: "Remove the fixture: {{ case.name }}"
+# A case that states no 'content' is not testing the file's contents: it is testing
+# a path the engine never wrote. 'absent' by default, or a 'fixture' naming what is
+# there instead - a symlink to nothing, or a directory. Both of those report
+# exists=true to a stat that does not follow, so they are a different branch from
+# an absent path and from an empty file.
+# Unconditionally, so a case never inherits the previous one's fixture: a case that
+# leaves a DIRECTORY at this path would otherwise make the next 'content' case fail
+# on 'can not use content with a dir as dest' rather than on what it was testing.
+- name: "Clear the fixture: {{ case.name }}"
   ansible.builtin.file:
     path: "{{ joe_agent_instance_id_file }}"
     state: absent
-  when: case.content is not defined
 
 - name: "Write the fixture: {{ case.name }}"
   ansible.builtin.copy:
@@ -14,6 +19,43 @@
     dest: "{{ joe_agent_instance_id_file }}"
     mode: "0600"
   when: case.content is defined
+
+- name: "Point the fixture at nothing: {{ case.name }}"
+  ansible.builtin.file:
+    src: "{{ joe_agent_instance_id_file }}.does-not-exist"
+    dest: "{{ joe_agent_instance_id_file }}"
+    state: link
+    force: true
+    follow: false
+  when: (case.fixture | default('')) == 'symlink'
+
+# The control for the dangling one: a symlink to a real file is a legitimate way to
+# place this id, so 'isreg' must not refuse it. That is what 'follow: true' on the
+# role's stat is for - without it a working symlink reports islnk, not isreg, and
+# would be refused.
+- name: "Point the fixture at a real file: {{ case.name }}"
+  when: (case.fixture | default('')) == 'symlink-to-a-file'
+  block:
+    - name: "Write the symlink's target: {{ case.name }}"
+      ansible.builtin.copy:
+        content: "{{ case.target_content }}"
+        dest: "{{ joe_agent_instance_id_file }}.target"
+        mode: "0600"
+
+    - name: "Link to it: {{ case.name }}"
+      ansible.builtin.file:
+        src: "{{ joe_agent_instance_id_file }}.target"
+        dest: "{{ joe_agent_instance_id_file }}"
+        state: link
+        force: true
+        follow: false
+
+- name: "Make the fixture a directory: {{ case.name }}"
+  ansible.builtin.file:
+    path: "{{ joe_agent_instance_id_file }}"
+    state: directory
+    mode: "0700"
+  when: (case.fixture | default('')) == 'directory'
 
 - name: Reset the case state
   ansible.builtin.set_fact:

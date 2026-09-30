@@ -136,6 +136,13 @@
         api_base_url: "https://postgres.ai/api/general\ndblab_token=takeover"
         expect_failure: "joe_agent_api_base_url carries a line break"
 
+      # Interpolated into a COMMENT in the template, which is why it was missed the
+      # first time: a newline breaks out of the comment, and the injected line lands
+      # ABOVE 'joe_token=', so a first-occurrence-wins parse uses the injected value.
+      - name: "the DBLab agent's path with a newline in it is refused"
+        dblab_config_path: "/root/.dblab/agent\njoe_token=attacker-token"
+        expect_failure: "dblab_agent_config_path carries a line break"
+
       # The control for the four cases above: the same values without the newline
       # are accepted, so the refusals are the newline and not the rest of the value.
       - name: "the same values without a newline are accepted"
@@ -234,7 +241,27 @@
       # installed but never have completed a first boot. A bare slurp would report
       # 'failed to find <path>' and say nothing about the engine.
       - name: "a missing file names the engine, not the slurp"
-        expect_failure: "has not assigned itself an instance id yet"
+        expect_failure: "is not a readable file"
+
+      # 'stat' does not follow a symlink by default, so both of these report
+      # exists=true and would pass an existence-only check, then die in the slurp -
+      # the bare module error the check exists to replace.
+      - name: "a dangling symlink names the engine, not the slurp"
+        fixture: symlink
+        expect_failure: "is not a readable file"
+
+      - name: "a directory names the engine, not the slurp"
+        fixture: directory
+        expect_failure: "is not a readable file"
+
+      # The control for the two above: 'isreg' must not refuse a symlink that
+      # resolves to a real file, which is a legitimate way to place this id. This is
+      # what 'follow: true' on the role's stat is for.
+      - name: "a symlink to a real file is accepted"
+        fixture: symlink-to-a-file
+        target_content: "cs0abcdefghijklmnopq"
+        expect_id: "cs0abcdefghijklmnopq"
+        expect_failure: ""
 
       - name: "a file of whitespace is refused"
         content: "   "

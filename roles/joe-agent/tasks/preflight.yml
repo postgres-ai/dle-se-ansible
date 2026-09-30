@@ -38,10 +38,16 @@
     # One of these is a secret, so the offender is reported by NAME and the values
     # never reach the message. That is also why this task is not 'no_log': the
     # message has to be readable, and it carries no value.
+    # Every variable the template interpolates, including the one it interpolates
+    # only into a COMMENT: a newline breaks out of the comment, and because the
+    # injected line lands above 'joe_token=' it is the one a first-occurrence-wins
+    # parse uses. 'joe_agent_platform_token' is the fourth and is checked in
+    # handle_registration.yml, where its value first exists.
     _joe_agent_rendered_vars:
       joe_agent_signing_secret: "{{ joe_agent_signing_secret }}"
       joe_agent_joe_url: "{{ joe_agent_joe_url }}"
       joe_agent_api_base_url: "{{ joe_agent_api_base_url }}"
+      dblab_agent_config_path: "{{ dblab_agent_config_path }}"
     # A folded scalar, not a quoted one: YAML turns '\r\n' inside double quotes
     # into the characters themselves, which would leave the pattern working only by
     # accident.

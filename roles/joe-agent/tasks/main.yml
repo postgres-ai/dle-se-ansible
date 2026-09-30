@@ -20,12 +20,25 @@
 # discards the pending restart - and the next run re-renders nothing, so it never
 # notifies again and the box stays stuck until Joe is restarted by hand.
 #
-# Ungated, unlike the DBLab agent's flush, and safe to be: 'dblab-engine' flushes
-# its own handler unconditionally and 'dblab-agent' flushes its own when it
-# notified one, and both roles run BEFORE 'joe-bot', so 'restart joe' is the only
-# handler that can still be pending here. Flushing is not touching another
-# service's configuration: it lets that service's own role act at the moment this
-# one depends on.
+# Ungated, unlike the DBLab agent's flush, and the reason is the POSITION rather
+# than what happens to be pending. 'dblab-agent' gates its flush because it sits
+# mid-role, after its healthz check, so a handler pulled in there would leave its
+# own later calls hitting a restarting engine. This one is the role's FIRST task:
+# whatever is pending runs to completion - including 'restart_engine.yml' with its
+# own port, /healthz and UI waits - before this role touches anything, and the Joe
+# agent never talks to the engine.
+#
+# So it does not matter that 'restart joe' is not always the only one pending. It
+# is on a full run and under '--tags joe-agent' alone, because 'dblab-engine' and
+# 'dblab-agent' each flush their own before 'joe-bot' runs; but on a multi-tag run
+# such as '--tags dle,joe-agent' the engine's notifying block is selected while
+# its untagged flush is not, and the engine restart is then pulled in here. The
+# effect is that an engine the operator just reconfigured restarts at the start of
+# this role instead of at end of play, and a broken one fails the run before an
+# agent is installed against it.
+#
+# Flushing is not touching another service's configuration: it lets that service's
+# own role act at the moment this one depends on.
 - name: Make sure Joe has loaded its configuration before it is asked what it serves
   ansible.builtin.meta: flush_handlers
 
