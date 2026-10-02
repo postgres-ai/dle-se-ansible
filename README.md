@@ -95,7 +95,7 @@ By default the DBLab server waits to be called: Postgres.ai connects to it, so i
 | Variable | Description | Default value |
 |:---------|:------------|:-------------:|
 | `dblab_agent_install` (optional) | Install the agent that makes this server call Postgres.ai. | `false` |
-| `dblab_agent_version` (optional) | The agent version. No released image carries the DBLab channel yet, so set this to a build that does. | `0.17.0-rc.4` |
+| `dblab_agent_version` (optional) | The agent version. This is the first `rc` tag that carries both job channels; every earlier `rc` serves neither. | `0.17.0-rc.5` |
 | `dblab_agent_image` (optional) | The agent container image. | `postgresai/instance-jobs:{{ dblab_agent_version \| replace('v', '') }}` |
 | `dblab_agent_container_name` (optional) | The agent container name. | `dblab_agent` |
 | `dblab_agent_config_path` (optional) | The directory holding the agent's `.pgwatch-config` file. | `{{ dblab_engine_base_path }}/agent` |
@@ -127,7 +127,7 @@ Notes:
 | Variable | Description | Default value |
 |:---------|:------------|:-------------:|
 | `joe_bot_install` (optional) | Install Joe Bot. | `false` |
-| `joe_version` (optional) | The Joe Bot version.| `0.11.0-rc.4` |
+| `joe_version` (optional) | The Joe Bot version. 0.11.x lacks the PG18 EXPLAIN fix, so every `explain` against a PG18 clone comes back `Failed`. | `0.12.0-rc.3` |
 | `joe_config_path`(optional) | The Joe Bot 'configs' directory. | `{{ dblab_engine_base_path }}/joe/configs` |
 | `joe_meta_path`(optional) | The Joe Bot 'meta' directory. | `{{ dblab_engine_base_path }}/joe/meta` |
 | `joe_image` (optional) | The Joe Bot container image. | `postgresai/joe:{{ joe_version }}` |
@@ -160,7 +160,7 @@ The playbook enrols the Joe itself, the same way it enrols an inverted engine: i
 |:---------|:------------|:-------------:|
 | `joe_agent_install` (optional) | Install the agent that makes this server's Joe call Postgres.ai. | `false` |
 | `joe_agent_instance_id_file` (optional) | The file holding the id this box registers under. The DBLab Engine assigns itself one on first boot and this reuses it, so the box has one identity. | `{{ dblab_engine_meta_path }}/instance_id` |
-| `joe_agent_version` (optional) | The agent version. There is no separate Joe image — the same image serves both channels — so this follows the DBLab agent's version by default. No released tag carries the Joe channel yet, so set this to a build that does. | `{{ dblab_agent_version }}` |
+| `joe_agent_version` (optional) | The agent version. There is no separate Joe image — the same image serves both channels — so this follows the DBLab agent's version by default. | `{{ dblab_agent_version }}` |
 | `joe_agent_image` (optional) | The agent container image. | `postgresai/instance-jobs:{{ joe_agent_version \| replace('v', '') }}` |
 | `joe_agent_container_name` (optional) | The agent container name. | `joe_agent` |
 | `joe_agent_config_path` (optional) | The directory holding this agent's `.pgwatch-config` file. Its own, not the DBLab agent's. | `{{ dblab_engine_base_path }}/joe-agent` |

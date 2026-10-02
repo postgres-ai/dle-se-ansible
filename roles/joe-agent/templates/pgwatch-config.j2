@@ -11,10 +11,6 @@
 # 'joe_verify_token' is the HMAC signing key, not a bearer token, and never goes
 # on the wire: it is named for symmetry with 'dblab_verify_token'. Its value is
 # Joe's own webui 'signingSecret'.
-#
-# NOTE: no RELEASED image carries the Joe channel yet - it arrives with
-# postgresai!445. An agent without the channel reads no joe_token, idles and
-# reports unhealthy.
 joe_token={{ joe_agent_platform_token }}
 joe_verify_token={{ joe_agent_signing_secret }}
 joe_url={{ joe_agent_joe_url }}
