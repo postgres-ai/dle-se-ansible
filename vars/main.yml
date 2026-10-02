@@ -56,10 +56,10 @@ platform_org_key: ""  # Organization key
 # token it is given and then asks the Platform for work. Nothing dials in, so
 # the server needs no public address and no open port. See platform-all#811.
 dblab_agent_install: false  # do not install the agent by default; inverted mode is an explicit choice
-# NOTE: no RELEASED image carries the DBLab channel yet - it lives on postgresai
-# feature/dblab-call-channel. Until that ships, set this to a build of that branch;
-# an agent without the channel reads no dblab_token, idles and reports unhealthy.
-dblab_agent_version: "0.17.0-rc.4"
+# The pinned tag must carry the job channels: an agent without them reads no
+# dblab_token, idles and reports unhealthy. 0.17.0-rc.5 is the first 'rc' tag that
+# does; joe_agent_version follows this var, so it covers both channels.
+dblab_agent_version: "0.17.0-rc.5"  # first 'rc' tag carrying BOTH job channels
 dblab_agent_image: "postgresai/instance-jobs:{{ dblab_agent_version | replace('v', '') }}"
 dblab_agent_container_name: dblab_agent
 dblab_agent_config_path: "{{ dblab_engine_base_path }}/agent"  # holds '.pgwatch-config', the agent's only file
@@ -89,7 +89,7 @@ cli_environment_id: "{{ platform_project_name }}"
 
 # Joe Bot
 joe_bot_install: false # do not install Joe Bot by default
-joe_version: 0.11.0-rc.5
+joe_version: 0.12.0-rc.3  # 0.11.x has no PG18 EXPLAIN fix: every explain reads Failed
 joe_config_path: "{{ dblab_engine_base_path }}/joe/configs"
 joe_meta_path: "{{ dblab_engine_base_path }}/joe/meta"
 joe_image: "postgresai/joe:{{ joe_version | replace('v', '') }}"
@@ -116,11 +116,9 @@ joe_dblab_params_sslmode: "prefer"
 # can run either, both or neither.
 joe_agent_install: false  # do not install the agent by default; inverted mode is an explicit choice
 # One image serves both channels, so one version per server. Override to pin Joe's
-# agent to a different build than the DBLab agent's.
-# NOTE: there is no separate Joe image - the same 'instance-jobs' image serves
-# both channels, and no released tag carries the Joe channel yet: it arrives with
-# postgresai!445. Until a tag has it, set this to a build of that branch; an agent
-# without the channel reads no joe_token, idles and reports unhealthy.
+# agent to a different build than the DBLab agent's - it must still be a tag that
+# carries the Joe channel, or the agent reads no joe_token, idles and reports
+# unhealthy.
 joe_agent_version: "{{ dblab_agent_version }}"
 joe_agent_image: "postgresai/instance-jobs:{{ joe_agent_version | replace('v', '') }}"
 joe_agent_container_name: joe_agent
