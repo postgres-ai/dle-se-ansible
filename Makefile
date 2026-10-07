@@ -66,6 +66,7 @@ tests: ## tests Ansible
 	$(MAKE) lint
 	$(MAKE) test-dblab-agent
 	$(MAKE) test-joe-agent
+	$(MAKE) test-cloud-deploy
 	$(MAKE) molecule-test-all
 
 .PHONY: tests-fast
@@ -73,11 +74,16 @@ tests-fast: ## tests Ansible quickly
 	$(MAKE) lint
 	$(MAKE) test-dblab-agent
 	$(MAKE) test-joe-agent
+	$(MAKE) test-cloud-deploy
 	$(MAKE) molecule-converge
 
 .PHONY: test-dblab-agent
 test-dblab-agent: ## Run the dblab-agent role tests (localhost only, no target host)
 	source .venv/bin/activate && ansible-playbook tests/dblab-agent/test.yml
+
+.PHONY: test-cloud-deploy
+test-cloud-deploy: ## Run the cloud deploy tests (localhost only, no target host)
+	source .venv/bin/activate && ansible-playbook tests/cloud-deploy/test.yml
 
 .PHONY: test-joe-agent
 test-joe-agent: ## Run the joe-agent role tests (localhost only, no target host)

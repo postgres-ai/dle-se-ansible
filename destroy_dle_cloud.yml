@@ -1,0 +1,66 @@
+---
+
+# Destroys a server deploy_dle_cloud.yml created (platform-all#876): the server and its volume, by
+# the name the Platform derived. Launched by the Platform only; reports destroyed / destroy_failed.
+
+- name: Destroy the cloud server
+  hosts: localhost
+  gather_facts: true
+  vars_files:
+    - vars/main.yml
+  vars:
+    state: absent
+  tasks:
+    - name: Check the variables the Platform must send
+      ansible.builtin.assert:
+        that:
+          - dblab_cloud_row_id | string | length > 0
+          - dblab_cloud_notify_token | length > 0
+          - server_name | default('') | length > 0
+          - server_location | default('') | length > 0
+        fail_msg: "The destroy request is incomplete; this playbook is run by the Platform only."
+        quiet: true
+
+    - name: Destroy
+      block:
+        - name: Run role cloud-resources
+          ansible.builtin.include_role:
+            name: cloud-resources
+
+        # A deploy that failed after uploading its temporary SSH key leaves it in the project; the
+        # keys this playbook's server used are labelled with its name.
+        - name: "Hetzner Cloud: Find SSH keys left by this server"
+          hetzner.hcloud.hcloud_ssh_key_info:
+            api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+            label_selector: "server={{ server_name | lower }}"
+          register: destroy_leftover_keys
+
+        - name: "Hetzner Cloud: Remove SSH keys left by this server"
+          hetzner.hcloud.hcloud_ssh_key:
+            api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+            name: "{{ item.name }}"
+            state: absent
+          loop: "{{ destroy_leftover_keys.hcloud_ssh_key_info | default([]) }}"
+          loop_control:
+            label: "{{ item.name }}"
+
+        - name: Report the server destroyed
+          ansible.builtin.include_role:
+            name: deploy-notify
+          vars:
+            deploy_notify_status: destroyed
+            deploy_notify_step: destroy_server
+      rescue:
+        - name: Report the failed destroy
+          ansible.builtin.include_role:
+            name: deploy-notify
+          vars:
+            deploy_notify_status: destroy_failed
+            deploy_notify_step: destroy_server
+            deploy_notify_error: "{{ ansible_failed_task.name | default('') }}: {{ ansible_failed_result.msg | default('') }}"
+
+        - name: Fail the run
+          ansible.builtin.fail:
+            msg: "Destroy failed: {{ ansible_failed_result.msg | default('') }}"
+
+...

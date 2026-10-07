@@ -181,6 +181,30 @@ certbot_certs:
     domains:
       - "{{ certbot_domain }}"
 
+# Cloud deploy (deploy_dle_cloud.yml / destroy_dle_cloud.yml): a server the Platform deploys on its
+# own account (platform-all#876). Every name is new in v1.6, so an older image that receives them
+# ignores them; the Platform also refuses to launch an image older than v1.6.
+dblab_cloud_row_id: ""  # the Platform's dblab_instances.id, sent back with every status report
+dblab_cloud_org_id: ""  # the owning org, put on the Hetzner server and volume as a label
+dblab_cloud_instance_id: ""  # written to meta/instance_id before the engine first boots
+dblab_cloud_notify_url: "{{ platform_url | default('https://postgres.ai/api/general') }}/rpc/dblab_instance_deploy_notify"
+dblab_cloud_notify_token: "{{ lookup('ansible.builtin.env', 'DBLAB_CLOUD_NOTIFY_TOKEN') }}"
+dblab_cloud_source_host: ""  # empty = no source; the engine waits in 'pending.retrieval' as before
+dblab_cloud_source_port: 5432
+dblab_cloud_source_dbname: "postgres"
+dblab_cloud_source_username: "postgres"
+# Never an extra-var: read from the ansible container's env and handed to the engine as PGPASSWORD.
+dblab_cloud_source_password: "{{ lookup('ansible.builtin.env', 'DBLAB_CLOUD_SOURCE_PASSWORD') }}"
+dblab_cloud_postgres_version: "17"  # the source's major version: pg_dump must not be older
+dblab_cloud_retrieval_timeout: 7200  # seconds to wait for the first retrieval and snapshot
+dblab_cloud_joe_signing_secret: "{{ lookup('ansible.builtin.env', 'DBLAB_CLOUD_JOE_SIGNING_SECRET') }}"
+dblab_cloud_engine_token: "{{ lookup('ansible.builtin.env', 'DBLAB_CLOUD_ENGINE_TOKEN') }}"
+dblab_engine_config_mode: "0644"  # the cloud playbook renders it 0600
+dblab_engine_db_image: "postgresai/extended-postgres:{{ dblab_cloud_postgres_version if dblab_cloud_source_host | length > 0 else '15' }}"
+
+# Firewall: deny incoming except SSH. Off by default so existing installs are untouched.
+dblab_firewall_install: false
+
 # Usage instructions
 print_usage_instructions: true # Print the usage instructions after deployment
 

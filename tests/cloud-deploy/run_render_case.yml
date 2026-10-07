@@ -1,0 +1,43 @@
+---
+- name: Render server.yml
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/../../roles/dblab-engine/templates/server.yml.j2"
+    dest: "{{ render_dir }}/server.yml"
+    mode: "0600"
+  vars:
+    platform_project_name: "p"
+    platform_org_key: "k"
+    dblab_cloud_source_host: "{{ case.vars.dblab_cloud_source_host }}"
+    dblab_cloud_source_port: "{{ case.vars.dblab_cloud_source_port | default(5432) }}"
+    dblab_cloud_source_dbname: "{{ case.vars.dblab_cloud_source_dbname | default('postgres') }}"
+    dblab_cloud_source_username: "{{ case.vars.dblab_cloud_source_username | default('postgres') }}"
+    dblab_cloud_source_password: "{{ case.vars.dblab_cloud_source_password }}"
+    dblab_cloud_postgres_version: "{{ case.vars.dblab_cloud_postgres_version | default('17') }}"
+
+- name: Read it back
+  ansible.builtin.slurp:
+    src: "{{ render_dir }}/server.yml"
+  register: rendered
+
+- name: Parse it
+  ansible.builtin.set_fact:
+    rendered_text: "{{ rendered.content | b64decode }}"
+    rendered_yaml: "{{ rendered.content | b64decode | from_yaml }}"
+
+- name: "Assert: {{ case.name }}"
+  vars:
+    conn: "{{ rendered_yaml.retrieval.spec.logicalDump.options.source.connection }}"
+    dbs: "{{ rendered_yaml.retrieval.spec.logicalDump.options.databases }}"
+  ansible.builtin.assert:
+    that:
+      - conn.host == case.expect.host
+      - conn.port | int == case.expect.port
+      - conn.dbname == case.expect.dbname
+      - conn.username == case.expect.username
+      - (dbs | default({}, true) | list) == case.expect.databases
+      - rendered_yaml.databaseContainer.dockerImage == case.expect.image
+      - rendered_yaml.global.database.dbname == case.expect.dbname
+      - "'s3cret-never-in-file' not in rendered_text"
+    fail_msg: "{{ case.name }}: conn={{ conn }}, dbs={{ dbs }}, image={{ rendered_yaml.databaseContainer.dockerImage }}"
+    quiet: true
+...

@@ -59,6 +59,17 @@ joe-agent-tests:
   tags:
     - dle-test
 
+cloud-deploy-tests:
+  stage: test
+  script:
+    - make bootstrap
+    - make test-cloud-deploy
+  rules:
+    - if: $CI_MERGE_REQUEST_IID
+    - if: $CI_COMMIT_BRANCH
+  tags:
+    - dle-test
+
 molecule-test:
   stage: test
   script:

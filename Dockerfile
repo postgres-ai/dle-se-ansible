@@ -17,7 +17,13 @@ RUN pip3 install ansible \
 
 # install requirements
 RUN cd dle-se-ansible && \
-    ansible-galaxy install -r requirements.yml
+    ansible-galaxy install -r requirements.yml && \
+    ansible-galaxy collection install hetzner.hcloud:7.1.0 -p /usr/lib/python3/dist-packages/ansible_collections
+
+# hetzner.hcloud is pinned above, into ANSIBLE_COLLECTIONS_PATHS, which wins over the
+# copy bundled with the ansible package: that one (3.1.1) reads server.datacenter, which
+# the Hetzner API no longer returns, so every server create fails with
+# "'NoneType' object has no attribute 'name'" (platform-all#876).
 
 # clean
 RUN apt-get autoremove -y --purge gnupg git \

@@ -1,0 +1,41 @@
+---
+
+# Waits for the engine's first retrieval and snapshot (platform-all#876), so 'ready' means there is
+# data to clone. Logical retrieval runs inside the engine after this play would otherwise end.
+
+- name: Wait for the DBLab Engine's first retrieval
+  ansible.builtin.uri:
+    url: "http://{{ dblab_engine_container_host }}:{{ dblab_engine_port }}/status"
+    headers:
+      Verification-Token: "{{ dblab_engine_verification_token }}"
+    return_content: true
+    timeout: 30
+  register: retrieval_wait_status
+  until: >-
+    retrieval_wait_status.status == 200
+    and (retrieval_wait_status.json.retrieving.status | default('')) in ['finished', 'failed']
+  retries: "{{ ((dblab_cloud_retrieval_timeout | int) // (retrieval_wait_poll_delay | int)) | int }}"
+  delay: "{{ retrieval_wait_poll_delay | int }}"
+  failed_when: false
+  no_log: true  # the request carries the verification token
+
+- name: Read the engine's snapshots
+  ansible.builtin.uri:
+    url: "http://{{ dblab_engine_container_host }}:{{ dblab_engine_port }}/snapshots"
+    headers:
+      Verification-Token: "{{ dblab_engine_verification_token }}"
+    return_content: true
+    timeout: 30
+  register: retrieval_wait_snapshots
+  failed_when: false
+  no_log: true
+
+- name: Classify the retrieval outcome
+  ansible.builtin.include_tasks: classify.yml
+
+- name: Fail when the first retrieval did not produce a snapshot
+  ansible.builtin.fail:
+    msg: "{{ retrieval_wait_message }}"
+  when: retrieval_wait_state != 'done'
+
+...

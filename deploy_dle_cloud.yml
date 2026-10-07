@@ -1,0 +1,303 @@
+---
+
+# Deploys DBLab Engine + Joe on a server the Platform runs on its own account (platform-all#876).
+# Launched by the Platform only. It always installs both agents (the server has no inbound path),
+# the firewall and Joe, writes the Platform's instance id before the engine boots, waits for the
+# first retrieval, and reports every step to the Platform. A failure anywhere is reported with the
+# failing task's message; the Platform then destroys the server.
+#
+# Secrets come from the environment, never from extra-vars (they appear in the task log):
+# DBLAB_CLOUD_NOTIFY_TOKEN, DBLAB_CLOUD_SOURCE_PASSWORD, DBLAB_CLOUD_JOE_SIGNING_SECRET,
+# DBLAB_CLOUD_ENGINE_TOKEN, HCLOUD_API_TOKEN.
+
+- name: Check the cloud deploy request
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  tasks:
+    - name: Check the variables the Platform must send
+      ansible.builtin.assert:
+        that:
+          - dblab_cloud_row_id | string | length > 0
+          - dblab_cloud_instance_id | length > 0
+          - dblab_cloud_notify_token | length > 0
+          - dblab_cloud_source_host | length > 0
+          - dblab_cloud_source_password | length > 0
+          - dblab_cloud_joe_signing_secret | length > 0
+          # Never the default token from vars/main.yml.
+          - dblab_cloud_engine_token | length >= 20
+          - platform_url is defined and platform_url is match('^https://')
+          # Without keys the Hetzner tasks attach EVERY key in the project.
+          - ssh_public_keys is defined and ssh_public_keys | length > 0
+        fail_msg: "The cloud deploy request is incomplete; this playbook is run by the Platform only."
+        quiet: true
+
+    - name: Report the start
+      ansible.builtin.include_role:
+        name: deploy-notify
+      vars:
+        deploy_notify_status: installing
+        deploy_notify_step: create_server
+        deploy_notify_stop_when_refused: true
+
+- name: Provision the server
+  hosts: localhost
+  gather_facts: true
+  any_errors_fatal: true
+  vars_files:
+    - vars/main.yml
+  tasks:
+    - name: Create the server and its volume
+      block:
+        - name: Run role cloud-resources
+          ansible.builtin.include_role:
+            name: cloud-resources
+      rescue:
+        - name: Report the provisioning failure
+          ansible.builtin.include_role:
+            name: deploy-notify
+          vars:
+            deploy_notify_status: failed
+            deploy_notify_step: create_server
+            deploy_notify_error: "{{ ansible_failed_task.name | default('') }}: {{ ansible_failed_result.msg | default('') }}"
+
+        - name: Stop here
+          ansible.builtin.fail:
+            msg: "Provisioning failed: {{ ansible_failed_result.msg | default('') }}"
+
+- name: Add the server to dblab_group
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Add {{ dblab_host }} to dblab_group
+      ansible.builtin.add_host:
+        name: "{{ dblab_host }}"
+        groups: dblab_group
+      changed_when: false
+      when: dblab_host is defined and dblab_host | length > 1
+
+- name: Use the temporary SSH key
+  hosts: dblab_group
+  gather_facts: false
+  tasks:
+    - name: "Set variable: ansible_ssh_private_key_file"
+      ansible.builtin.set_fact:
+        ansible_ssh_private_key_file: "~{{ lookup('env', 'USER') }}/.ssh/{{ hostvars['localhost']['dblab_tmp_ssh_key_name'] }}"
+      when:
+        - hostvars['localhost']['ssh_key_name'] is defined
+        - hostvars['localhost']['ssh_key_name'] == hostvars['localhost']['dblab_tmp_ssh_key_name']
+
+- name: Deploy DBLab Engine and Joe
+  hosts: dblab_group
+  become: true
+  become_method: sudo
+  gather_facts: true
+  any_errors_fatal: true
+  environment: "{{ proxy_env | default({}) }}"
+  vars:
+    minimal_ansible_version: 2.11.0
+    minimal_dblab_engine_version: 3.4.0
+  tasks:
+    - name: Deploy
+      block:
+        - name: Common preparation
+          ansible.builtin.import_tasks: tasks/software_pre_tasks.yml
+
+        # set_fact outranks include_vars, so these hold whatever vars/main.yml says.
+        - name: Fix the settings every cloud server gets
+          ansible.builtin.set_fact:
+            dblab_agent_install: true
+            joe_bot_install: true
+            joe_agent_install: true
+            dblab_firewall_install: true
+            dblab_engine_config_mode: "0600"
+            joe_communication_type: webui
+            joe_communication_signing_secret: "{{ dblab_cloud_joe_signing_secret }}"
+            joe_dblab_params_dbname: "{{ dblab_cloud_source_dbname }}"
+            dblab_engine_verification_token: "{{ dblab_cloud_engine_token }}"
+            # The usage block prints the engine token into the task log.
+            print_usage_instructions: false
+          no_log: true
+
+        - name: Report the engine install
+          ansible.builtin.include_role:
+            name: deploy-notify
+          vars:
+            deploy_notify_status: installing
+            deploy_notify_step: install_engine
+
+        - name: Run role authorized-keys
+          ansible.builtin.include_role:
+            name: authorized-keys
+
+        - name: Run role add-repository
+          ansible.builtin.include_role:
+            name: add-repository
+
+        - name: Run role packages
+          ansible.builtin.include_role:
+            name: packages
+
+        - name: Run role firewall
+          ansible.builtin.include_role:
+            name: firewall
+
+        - name: Run role zpool
+          ansible.builtin.include_role:
+            name: zpool
+
+        - name: Run role dblab-engine
+          ansible.builtin.include_role:
+            name: dblab-engine
+
+        - name: Run role dblab-cli
+          ansible.builtin.include_role:
+            name: dblab-cli
+
+        - name: Report the Joe install
+          ansible.builtin.include_role:
+            name: deploy-notify
+          vars:
+            deploy_notify_status: installing
+            deploy_notify_step: install_joe
+
+        - name: Run role joe-bot
+          ansible.builtin.include_role:
+            name: joe-bot
+
+        - name: Report the agents
+          ansible.builtin.include_role:
+            name: deploy-notify
+          vars:
+            deploy_notify_status: installing
+            deploy_notify_step: connect_agents
+
+        - name: Run role dblab-agent
+          ansible.builtin.include_role:
+            name: dblab-agent
+
+        - name: Run role joe-agent
+          ansible.builtin.include_role:
+            name: joe-agent
+
+        # Joe posts its answers with this token. It is the Joe instance token the registration just
+        # minted, scoped to this Joe's own sessions; nothing org-wide is left on the server.
+        - name: Hand Joe the token its registration minted
+          ansible.builtin.set_fact:
+            joe_platform_token: "{{ joe_agent_platform_token }}"
+          no_log: true
+
+        - name: Re-render Joe's configuration with that token
+          ansible.builtin.include_role:
+            name: joe-bot
+
+        - name: Restart Joe now
+          ansible.builtin.meta: flush_handlers
+
+        - name: Report the first retrieval
+          ansible.builtin.include_role:
+            name: deploy-notify
+          vars:
+            deploy_notify_status: retrieving
+            deploy_notify_step: retrieve_data
+
+        - name: Run role retrieval-wait
+          ansible.builtin.include_role:
+            name: retrieval-wait
+
+        - name: Run role netdata
+          ansible.builtin.include_role:
+            name: netdata
+
+        - name: Run role deploy-finish
+          ansible.builtin.include_role:
+            name: deploy-finish
+
+        # Fail-closed: 'finished' is reported only when this last task ran. A host that becomes
+        # unreachable skips both this and the rescue, and is reported as failed below.
+        - name: Mark the deploy as succeeded
+          ansible.builtin.set_fact:
+            deploy_succeeded: true
+          delegate_to: localhost
+          delegate_facts: true
+      rescue:
+        # On ansible-core 2.17 a failing handler (the engine or Joe start, run by flush_handlers)
+        # reaches here with no failed task or message: find the reason from the containers' state.
+        # Their logs are not read, so nothing secret can end up in the reason.
+        - name: Find why the engine or Joe did not start
+          ansible.builtin.shell: |
+            set -o pipefail
+            for c in {{ dblab_engine_container_name | default('dblab_server') }} {{ joe_container_name | default('joe_bot') }}; do
+              s=$(docker inspect -f '{{ '{{' }}.State.Status{{ '}}' }} (exit code {{ '{{' }}.State.ExitCode{{ '}}' }})' "$c" 2>/dev/null) \
+                || { echo "container $c was not created (its image could not be pulled, or it could not start)"; continue; }
+              case "$s" in running*) ;; *) echo "container $c is $s";; esac
+            done
+          args:
+            executable: /bin/bash
+          register: deploy_diag
+          changed_when: false
+          failed_when: false
+          when: ansible_failed_task is not defined
+
+        - name: Mark the deploy as failed
+          ansible.builtin.set_fact:
+            deploy_failed_task: "{{ ansible_failed_task.name | default('Start DBLab Engine and Joe') }}"
+            deploy_error_msg: >-
+              {{ (ansible_failed_result.msg | default('')) | string
+                 if ansible_failed_task is defined
+                 else ((deploy_diag.stdout_lines | default([]) | join('; '))
+                       or 'DBLab Engine or Joe did not become ready in time') }}
+          delegate_to: localhost
+          delegate_facts: true
+
+- name: Report the outcome to the Platform
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - vars/main.yml
+  tasks:
+    # A refused 'finished' (an agent never polled, or the Platform kept failing) is reported as a
+    # failure, so the server is removed now instead of when the Platform stops waiting.
+    - name: Report success
+      when: deploy_succeeded | default(false) | bool
+      block:
+        - name: Report the finished deploy
+          ansible.builtin.include_role:
+            name: deploy-notify
+          vars:
+            deploy_notify_status: finished
+            deploy_notify_step: ready
+      rescue:
+        - name: Report that the Platform did not accept the finished deploy
+          ansible.builtin.include_role:
+            name: deploy-notify
+          vars:
+            deploy_notify_status: failed
+            deploy_notify_step: connect_agents
+            deploy_notify_error: "{{ ansible_failed_result.msg | default('The Platform did not accept the finished deploy.') }}"
+
+        - name: Fail the run
+          ansible.builtin.fail:
+            msg: "{{ ansible_failed_result.msg | default('The Platform did not accept the finished deploy.') }}"
+
+    - name: Report failure
+      ansible.builtin.include_role:
+        name: deploy-notify
+      vars:
+        deploy_notify_status: failed
+        deploy_notify_step: ""
+        deploy_notify_error: >-
+          {{ (deploy_failed_task | default('') ~ ': ' ~ deploy_error_msg | default(''))
+             if (deploy_failed_task | default('') | length) > 0
+             else 'The deploy stopped without details from the server: it failed in a step that reports none, or became unreachable.' }}
+      when: not (deploy_succeeded | default(false) | bool)
+
+    - name: Fail the run when the deploy failed
+      ansible.builtin.fail:
+        msg: >-
+          {{ deploy_error_msg | default('The deploy stopped without details from the server:
+          it failed in a step that reports none, or became unreachable.') }}
+      when: not (deploy_succeeded | default(false) | bool)
+
+...

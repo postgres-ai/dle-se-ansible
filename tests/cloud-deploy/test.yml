@@ -1,0 +1,249 @@
+---
+
+# Tests for the cloud deploy's decision logic (platform-all#876). Run from the repository root:
+#
+#   ansible-playbook tests/cloud-deploy/test.yml
+#
+# Localhost only; touches nothing but a temporary directory.
+
+- name: "Cloud deploy | status report body"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    notify_tasks: "{{ playbook_dir }}/../../roles/deploy-notify/tasks"
+  tasks:
+    - name: Run the body cases
+      ansible.builtin.include_tasks: run_body_case.yml
+      loop:
+        - name: "no row id: reporting is off"
+          row_id: ""
+          status: installing
+          step: create_server
+          expect_enabled: false
+        - name: "a row id: the report carries it, as a number"
+          row_id: "42"
+          status: installing
+          step: install_engine
+          expect_enabled: true
+          expect_instance_id: 42
+        - name: "the server's address comes from dblab_host"
+          row_id: "42"
+          status: installing
+          step: install_engine
+          dblab_host: "root@203.0.113.7"
+          expect_enabled: true
+          expect_ip: "203.0.113.7"
+        - name: "a long failure message is capped at 2000 characters"
+          row_id: "42"
+          status: failed
+          step: retrieve_data
+          error: "{{ 'x' * 5000 }}"
+          expect_enabled: true
+          expect_error_len: 2000
+      loop_control:
+        loop_var: case
+        label: "{{ case.name }}"
+
+- name: "Cloud deploy | retrieval outcome"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    classify_tasks: "{{ playbook_dir }}/../../roles/retrieval-wait/tasks"
+    dblab_cloud_retrieval_timeout: 7200
+  tasks:
+    - name: Run the retrieval cases
+      ansible.builtin.include_tasks: run_retrieval_case.yml
+      loop:
+        - name: "finished with a snapshot: done"
+          status: { json: { retrieving: { status: finished } } }
+          snapshots: { json: [{ id: "s1" }] }
+          expect_state: done
+        - name: "finished without a snapshot: failed, says so"
+          status: { json: { retrieving: { status: finished } } }
+          snapshots: { json: [] }
+          expect_state: failed
+          expect_message: "produced no snapshot"
+        - name: "failed with the engine's alert: the alert is passed on"
+          status: { json: { retrieving: { status: failed, alerts: { refresh_failed: { message: "pg_dump: connection refused" } } } } }
+          snapshots: { json: [] }
+          expect_state: failed
+          expect_message: "pg_dump: connection refused"
+        - name: "failed without an alert: still a readable message"
+          status: { json: { retrieving: { status: failed } } }
+          snapshots: { json: [] }
+          expect_state: failed
+          expect_message: "reported no details"
+        - name: "still refreshing when the wait ends: a timeout naming the minutes and the state"
+          status: { json: { retrieving: { status: refreshing } } }
+          snapshots: { json: [] }
+          expect_state: timeout
+          expect_message: "within 120 minutes (last state: refreshing)"
+        - name: "the engine never answered: a timeout with an unknown state"
+          status: { status: -1, msg: "Connection refused" }
+          snapshots: { status: -1 }
+          expect_state: timeout
+          expect_message: "last state: unknown"
+        - name: "an error object instead of a snapshot list is not counted as snapshots"
+          status: { json: { retrieving: { status: finished } } }
+          snapshots: { json: { code: "UNAUTHORIZED", message: "bad token" } }
+          expect_state: failed
+          expect_message: "produced no snapshot"
+      loop_control:
+        loop_var: case
+        label: "{{ case.name }}"
+
+- name: "Cloud deploy | server.yml with a Platform-configured source"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars_files:
+    - ../../vars/main.yml
+  vars:
+    render_dir: "/tmp/dle-cloud-deploy-test"
+  tasks:
+    - name: Create the render directory
+      ansible.builtin.file:
+        path: "{{ render_dir }}"
+        state: directory
+        mode: "0700"
+
+    - name: Run the render cases
+      ansible.builtin.include_tasks: run_render_case.yml
+      loop:
+        - name: "a source: connection, single database and the matching image"
+          vars:
+            dblab_cloud_source_host: "db.example.com"
+            dblab_cloud_source_port: 6432
+            dblab_cloud_source_dbname: "app db"
+            dblab_cloud_source_username: "dblab_reader"
+            dblab_cloud_source_password: "s3cret-never-in-file"
+            dblab_cloud_postgres_version: "16"
+          expect:
+            host: "db.example.com"
+            port: 6432
+            dbname: "app db"
+            username: "dblab_reader"
+            databases: ["app db"]
+            image: "postgresai/extended-postgres:16"
+        - name: "no source: today's defaults, all databases"
+          vars:
+            dblab_cloud_source_host: ""
+            dblab_cloud_source_password: ""
+          expect:
+            host: ""
+            port: 5432
+            dbname: "postgres"
+            username: "postgres"
+            databases: []
+            image: "postgresai/extended-postgres:15"
+      loop_control:
+        loop_var: case
+        label: "{{ case.name }}"
+
+    - name: Remove the render directory
+      ansible.builtin.file:
+        path: "{{ render_dir }}"
+        state: absent
+
+# Hetzner refuses to delete a volume while the server it was attached to is still being deleted
+# (an internal server error, seen on a real destroy). The delete must retry until it goes through.
+- name: "Cloud deploy | the destroy waits out the volume's detach"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    delete_block: >-
+      {{ (lookup('ansible.builtin.file', playbook_dir ~ '/../../roles/cloud-resources/tasks/hetzner.yml') | from_yaml)
+         | selectattr('block', 'defined') | selectattr('when', 'defined') | selectattr('when', 'equalto', "state == 'absent'")
+         | first }}
+    volume_delete: >-
+      {{ delete_block.block | selectattr('name', 'search', 'Delete volume') | first }}
+  tasks:
+    - name: "Assert: the volume delete retries until it succeeds"
+      ansible.builtin.assert:
+        that:
+          - volume_delete.register is defined
+          - (volume_delete.retries | default(0) | int) >= 10
+          - (volume_delete.delay | default(0) | int) >= 5
+          - volume_delete.until is defined and volume_delete.register in volume_delete.until
+        fail_msg: "The volume delete does not retry: {{ volume_delete | to_json }}"
+        quiet: true
+
+# The engine token never reaches the task log: it comes from the environment, the request check
+# refuses a missing one (no fallback to the default in vars/main.yml), and the usage block that
+# prints it is off.
+- name: "Cloud deploy | the engine token stays out of the task log"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    plays: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../deploy_dle_cloud.yml') | from_yaml }}"
+    request_check: >-
+      {{ (plays | selectattr('name', 'equalto', 'Check the cloud deploy request') | first).tasks
+         | selectattr('name', 'equalto', 'Check the variables the Platform must send') | first }}
+    deploy_block: >-
+      {{ ((plays | selectattr('name', 'equalto', 'Deploy DBLab Engine and Joe') | first).tasks | first).block }}
+    settings: >-
+      {{ (deploy_block | selectattr('name', 'equalto', 'Fix the settings every cloud server gets') | first)['ansible.builtin.set_fact'] }}
+    engine_token_var: "{{ (lookup('ansible.builtin.file', playbook_dir ~ '/../../vars/main.yml') | from_yaml).dblab_cloud_engine_token | default('') }}"
+  tasks:
+    - name: "Assert: env token, required, usage block off"
+      ansible.builtin.assert:
+        that:
+          - "'DBLAB_CLOUD_ENGINE_TOKEN' in engine_token_var"
+          - "request_check['ansible.builtin.assert'].that | select('search', 'dblab_cloud_engine_token') | list | length == 1"
+          - "settings.dblab_engine_verification_token is search('dblab_cloud_engine_token')"
+          - "settings.print_usage_instructions == false"
+        fail_msg: "settings={{ settings | to_json }}"
+        quiet: true
+
+# A deploy the Platform already failed or deleted stops before creating a server, and a refused
+# 'finished' is reported as a failure (the Platform then removes the server) instead of left to time out.
+- name: "Cloud deploy | refused reports stop the deploy"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    plays: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../deploy_dle_cloud.yml') | from_yaml }}"
+    notify_tasks: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../roles/deploy-notify/tasks/main.yml') | from_yaml }}"
+    start_report: >-
+      {{ (plays | selectattr('name', 'equalto', 'Check the cloud deploy request') | first).tasks
+         | selectattr('name', 'equalto', 'Report the start') | first }}
+    stop_task: "{{ notify_tasks | selectattr('name', 'equalto', 'Stop when the Platform no longer expects this deploy') | list }}"
+    success: >-
+      {{ (plays | selectattr('name', 'equalto', 'Report the outcome to the Platform') | first).tasks
+         | selectattr('name', 'equalto', 'Report success') | first }}
+  tasks:
+    - name: "Assert: the start stops on 401/409; a refused finish reports failed"
+      ansible.builtin.assert:
+        that:
+          - start_report.vars.deploy_notify_stop_when_refused | bool
+          - stop_task | length == 1
+          - stop_task[0].when | select('search', '401, 409') | list | length == 1
+          - success.rescue is defined
+          - (success.rescue | first).vars.deploy_notify_status == 'failed'
+        fail_msg: "start={{ start_report | to_json }}"
+        quiet: true
+
+# On ansible-core 2.17 (the image's), a failing handler (the engine or Joe start) reaches the rescue
+# with no failed task or message. The rescue then finds the reason itself (the containers' state)
+# so the Platform never gets an empty failure.
+- name: "Cloud deploy | a handler failure still reports a reason"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    plays: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../deploy_dle_cloud.yml') | from_yaml }}"
+    deploy_task: "{{ ((plays | selectattr('name', 'equalto', 'Deploy DBLab Engine and Joe') | first).tasks | first) }}"
+    diag: "{{ deploy_task.rescue | selectattr('register', 'defined') | selectattr('register', 'equalto', 'deploy_diag') | list }}"
+    mark: "{{ deploy_task.rescue | selectattr('name', 'equalto', 'Mark the deploy as failed') | first }}"
+  tasks:
+    - name: "Assert: the rescue inspects the containers when Ansible gives no reason, and uses it"
+      ansible.builtin.assert:
+        that:
+          - diag | length == 1
+          - diag[0].when is search('ansible_failed_task is not defined')
+          - mark['ansible.builtin.set_fact'].deploy_error_msg is search('deploy_diag')
+          - mark['ansible.builtin.set_fact'].deploy_failed_task is search('Start')
+        fail_msg: "rescue={{ deploy_task.rescue | to_json }}"
+        quiet: true
+
+...

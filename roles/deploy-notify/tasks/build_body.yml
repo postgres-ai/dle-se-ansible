@@ -1,0 +1,20 @@
+---
+
+# Pure: builds the report from facts, so it can be tested without a Platform.
+- name: Build the deploy status report body
+  ansible.builtin.set_fact:
+    deploy_notify_enabled: "{{ dblab_cloud_row_id | default('', true) | string | length > 0 }}"
+    deploy_notify_body:
+      p_instance_id: "{{ dblab_cloud_row_id | default(0, true) | int }}"
+      p_token: "{{ dblab_cloud_notify_token | default('', true) }}"
+      p_status: "{{ deploy_notify_status }}"
+      p_step: "{{ deploy_notify_step | default('', true) }}"
+      # Capped: an ansible failure message can carry a whole module traceback.
+      p_error: "{{ (deploy_notify_error | default('', true) | string)[:2000] }}"
+      # The server's public address, once it exists: the Console shows it for 'ssh -L'. Read from
+      # dblab_host ('root@<ip>'), not from server_result: a later, skipped task in the provider's
+      # role registers the same name and overwrites it.
+      p_server_ip: "{{ (hostvars['localhost']['dblab_host'] | default('', true)).split('@') | last }}"
+  no_log: true
+
+...

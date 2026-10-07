@@ -122,6 +122,15 @@
     - state == 'present'
     - existing_server_check.hcloud_server_info | default([]) | length > 0
 
+# Labels: the Platform's ids on a cloud deploy, so its servers and volumes can be found by owner.
+- name: "Hetzner Cloud: set_fact hetzner_server_labels"
+  ansible.builtin.set_fact:
+    hetzner_server_labels: >-
+      {{ {'dblab': '', 'env': 'dblab', 'server': server_name | lower}
+         | combine({'pgai_org': dblab_cloud_org_id | string, 'pgai_instance': dblab_cloud_row_id | string}
+                   if dblab_cloud_row_id | default('', true) | string | length > 0 else {}) }}
+  when: state == 'present'
+
 # Create (if state is present)
 - block:
     - name: "Hetzner Cloud: Create or modify server '{{ server_name }}'"
@@ -131,14 +140,13 @@
         state: present
         server_type: "{{ server_type | lower }}"
         image: "{{ server_image | lower }}"
-        ssh_keys: "{{ ssh_key_names }}"
+        # unique: with no ssh_key_name the temporary key is gathered twice (once by name, once with
+        # every project key), and hcloud >= 2.18 rejects the request with 'SSH-Keys must be unique' (#34).
+        ssh_keys: "{{ ssh_key_names | unique }}"
         location: "{{ server_location }}"
         enable_ipv4: true
         enable_ipv6: false
-        labels:
-          dblab: ""
-          env: dblab
-          server: "{{ server_name | lower }}"
+        labels: "{{ hetzner_server_labels }}"
       register: server_result
 
     - name: "Hetzner Cloud: Add server to network '{{ server_network }}'"
@@ -156,10 +164,7 @@
         state: present
         size: "{{ volume_size | int }}"
         server: "{{ server_name | lower }}"
-        labels:
-          dblab: ""
-          env: dblab
-          server: "{{ server_name | lower }}"
+        labels: "{{ hetzner_server_labels }}"
   when: state == 'present'
 
 # Info
@@ -228,6 +233,11 @@
         name: "{{ server_name }}-storage"
         state: absent
         location: "{{ server_location }}"
+      # Hetzner refuses the delete while the server it was attached to is still going away.
+      register: volume_delete_result
+      until: volume_delete_result is succeeded
+      retries: 10
+      delay: 6
   when: state == 'absent'
 
 ...
