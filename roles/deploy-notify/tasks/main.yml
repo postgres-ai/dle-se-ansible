@@ -1,0 +1,60 @@
+---
+
+# Reports a cloud deploy's progress to the Platform (platform-all#876). Inputs:
+#   deploy_notify_status: installing | retrieving | finished | failed | destroyed | destroy_failed
+#   deploy_notify_step:   create_server | install_engine | retrieve_data | install_joe |
+#                         connect_agents | destroy_server
+#   deploy_notify_error:  failure text (optional)
+# A no-op unless the Platform asked for reports (dblab_cloud_row_id set).
+
+- name: Build the deploy status report
+  ansible.builtin.include_tasks: build_body.yml
+
+# 'finished' is answered 409 until both agents on this server have polled, so it is retried for
+# a while; every other report is retried only against transport errors and 5xx.
+- name: "Report deploy status to the Platform: {{ deploy_notify_status }} / {{ deploy_notify_step | default('') }}"
+  ansible.builtin.uri:
+    url: "{{ dblab_cloud_notify_url }}"
+    method: POST
+    headers:
+      Accept: "application/json"
+    body_format: json
+    body: "{{ deploy_notify_body }}"
+    status_code: [200, 204]
+    timeout: 30
+  register: deploy_notify_result
+  until: deploy_notify_result.status in [200, 204] or deploy_notify_result.status in [400, 401, 403, 404, 410]
+  retries: "{{ 24 if deploy_notify_status == 'finished' else 5 }}"
+  delay: 5
+  no_log: true  # the body carries the notify token
+  failed_when: false
+  delegate_to: localhost
+  become: false
+  when: deploy_notify_enabled | bool
+
+# The Platform refuses reports for a deploy it has already failed or deleted (401: the token was
+# rotated; 409: the status moved on). Before anything is created, that means: stop here, or the
+# server would be built for a row nothing will ever clean up.
+- name: Stop when the Platform no longer expects this deploy
+  ansible.builtin.fail:
+    msg: >-
+      The Platform no longer expects this deploy (HTTP {{ deploy_notify_result.status }}); stopping
+      before anything is created.
+  when:
+    - deploy_notify_enabled | bool
+    - deploy_notify_stop_when_refused | default(false) | bool
+    - deploy_notify_result.status | default(0) in [401, 409]
+
+# A report that never landed is not fatal by itself: the Platform's sweeper fails a deploy that
+# stops reporting. But 'finished' is the one report the Platform needs to reach 'ready'.
+- name: Fail when the Platform did not accept the final report
+  ansible.builtin.fail:
+    msg: >-
+      The Platform did not accept the 'finished' report (HTTP {{ deploy_notify_result.status | default('none') }}:
+      {{ (deploy_notify_result.json | default({})).message | default(deploy_notify_result.msg | default('')) }}).
+  when:
+    - deploy_notify_enabled | bool
+    - deploy_notify_status == 'finished'
+    - deploy_notify_result.status | default(0) not in [200, 204]
+
+...

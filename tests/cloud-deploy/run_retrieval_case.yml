@@ -1,0 +1,15 @@
+---
+- name: Classify
+  ansible.builtin.include_tasks: "{{ classify_tasks }}/classify.yml"
+  vars:
+    retrieval_wait_status: "{{ case.status }}"
+    retrieval_wait_snapshots: "{{ case.snapshots }}"
+
+- name: "Assert: {{ case.name }}"
+  ansible.builtin.assert:
+    that:
+      - retrieval_wait_state == case.expect_state
+      - (case.expect_message is not defined) or (case.expect_message in retrieval_wait_message)
+    fail_msg: "{{ case.name }}: state={{ retrieval_wait_state }}, message='{{ retrieval_wait_message }}'"
+    quiet: true
+...

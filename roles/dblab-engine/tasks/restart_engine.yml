@@ -13,11 +13,17 @@
         volumes: "{{ docker_container_volumes }}"
         ports:
           - "{{ dblab_engine_container_host }}:{{ dblab_engine_port }}:2345"
-        env:
-          DOCKER_API_VERSION: "1.39"
-          DLE_COMPUTING_INFRASTRUCTURE: "{{ dblab_engine_computing_infrastructure }}"
+        # PGPASSWORD outranks 'password' in server.yml, so the source password never lands in a file.
+        env: >-
+          {{ {'DOCKER_API_VERSION': '1.39',
+              'DLE_COMPUTING_INFRASTRUCTURE': dblab_engine_computing_infrastructure}
+             | combine({'PGPASSWORD': dblab_cloud_source_password}
+                       if dblab_cloud_source_host | default('', true) | length > 0
+                          and dblab_cloud_source_password | default('', true) | length > 0
+                       else {}) }}
       vars:
         docker_container_volumes: "{{ dblab_engine_container_default_volumes + dblab_engine_container_additional_volumes }}"
+      no_log: "{{ dblab_cloud_source_password | default('', true) | length > 0 }}"  # env carries PGPASSWORD
 
     - name: Wait for DBLab Engine API port to be available
       ansible.builtin.wait_for:

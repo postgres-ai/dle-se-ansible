@@ -1,0 +1,31 @@
+---
+- name: Set the provisioned server's address, as the provision play does
+  ansible.builtin.set_fact:
+    dblab_host: "{{ case.dblab_host | default('') }}"
+  delegate_to: localhost
+  delegate_facts: true
+
+- name: Build the body
+  ansible.builtin.include_tasks: "{{ notify_tasks }}/build_body.yml"
+  vars:
+    dblab_cloud_row_id: "{{ case.row_id }}"
+    dblab_cloud_notify_token: "tok"
+    deploy_notify_status: "{{ case.status }}"
+    deploy_notify_step: "{{ case.step }}"
+    deploy_notify_error: "{{ case.error | default('') }}"
+
+- name: "Assert: {{ case.name }}"
+  ansible.builtin.assert:
+    that:
+      - (deploy_notify_enabled | bool) == case.expect_enabled
+      - (case.expect_instance_id is not defined) or (deploy_notify_body.p_instance_id | int == case.expect_instance_id)
+      - deploy_notify_body.p_status == case.status
+      - deploy_notify_body.p_step == case.step
+      - deploy_notify_body.p_token == 'tok'
+      - (case.expect_error_len is not defined) or (deploy_notify_body.p_error | length == case.expect_error_len)
+      - deploy_notify_body.p_server_ip == (case.expect_ip | default(''))
+    fail_msg: >-
+      {{ case.name }}: enabled={{ deploy_notify_enabled }}, id={{ deploy_notify_body.p_instance_id }},
+      error_len={{ deploy_notify_body.p_error | length }}
+    quiet: true
+...

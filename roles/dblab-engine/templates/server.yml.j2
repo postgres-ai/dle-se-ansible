@@ -56,7 +56,7 @@ global:
     username: postgres
 
     # Default database name.
-    dbname: postgres
+    dbname: {{ (dblab_cloud_source_dbname if dblab_cloud_source_host | length > 0 else "postgres") | to_json }}
 
 # Manages filesystem pools (in the case of ZFS) or volume groups.
 poolManager:
@@ -100,7 +100,7 @@ databaseContainer: &db_container
   # It is possible to choose any custom or official Docker image that runs Postgres. Our Dockerfile
   # (See https://gitlab.com/postgres-ai/custom-images/-/tree/master/extended)
   # is recommended in case if customization is needed.
-  dockerImage: "postgresai/extended-postgres:15"
+  dockerImage: "{{ dblab_engine_db_image }}"
 
   # Container parameters, see
   # https://docs.docker.com/engine/reference/run/#runtime-constraints-on-resources
@@ -210,10 +210,10 @@ retrieval:
             # Database connection parameters.
             # Currently, only password can be specified via environment variable (PGPASSWORD),
             # everything else needs to be specified here.
-            dbname: postgres
-            host: ""
-            port: 5432
-            username: postgres
+            dbname: {{ (dblab_cloud_source_dbname if dblab_cloud_source_host | length > 0 else "postgres") | to_json }}
+            host: {{ dblab_cloud_source_host | to_json }}
+            port: {{ (dblab_cloud_source_port if dblab_cloud_source_host | length > 0 else 5432) | int }}
+            username: {{ (dblab_cloud_source_username if dblab_cloud_source_host | length > 0 else "postgres") | to_json }}
 
             # Connection password. The environment variable PGPASSWORD can be used instead of this option.
             # The environment variable has a higher priority.
@@ -223,6 +223,9 @@ retrieval:
         # By default, DBLab Engine dumps and restores all available databases.
         # Do not specify the databases section to take all databases.
         databases:
+{% if dblab_cloud_source_host | length > 0 %}
+          {{ dblab_cloud_source_dbname | to_json }}:
+{% endif %}
         #   database1:
         # Options for a partial dump.
         # Do not specify the tables section to dump all available tables.

@@ -1,0 +1,37 @@
+---
+
+# Deny incoming traffic except SSH (platform-all#876). The engine, its UI, Joe and every clone
+# already bind 127.0.0.1; this also closes netdata, which runs on the host network. Docker's
+# published ports bypass ufw, which is why the loopback bindings stay the real guard for those.
+- name: Ensure ufw is installed
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+  register: firewall_apt_status
+  until: firewall_apt_status is success
+  delay: 10
+  retries: 3
+
+- name: Allow OpenSSH
+  community.general.ufw:
+    rule: allow
+    name: OpenSSH
+
+# The engine checks every clone port by dialling its Docker network's gateway, i.e. this host. A
+# dropped probe takes 3 s to time out, and 101 of them keep the engine API down past every wait;
+# so traffic from the Docker networks (default pools 172.16/12 and 192.168/16) is allowed.
+- name: Allow the Docker networks
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ item }}"
+  loop:
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+
+- name: Deny incoming by default and enable the firewall
+  community.general.ufw:
+    state: enabled
+    policy: deny
+    direction: incoming
+
+...

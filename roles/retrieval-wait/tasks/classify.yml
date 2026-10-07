@@ -1,0 +1,36 @@
+---
+
+# Pure: turns the engine's /status and /snapshots replies into done | failed | timeout, with a
+# message a customer can act on. Inputs: retrieval_wait_status, retrieval_wait_snapshots.
+- name: Classify the engine's retrieval state
+  ansible.builtin.set_fact:
+    retrieval_wait_engine_status: "{{ (retrieval_wait_status.json | default({})).retrieving.status | default('') }}"
+    retrieval_wait_alert: >-
+      {{ ((((retrieval_wait_status.json | default({})).retrieving | default({})).alerts | default({}))
+          .refresh_failed | default({})).message | default('') }}
+    # Only a list counts: the engine answers an error object (a mapping) on a bad token.
+    retrieval_wait_snapshot_count: >-
+      {{ (retrieval_wait_snapshots.json
+          if (retrieval_wait_snapshots.json | default(none)) is sequence
+             and retrieval_wait_snapshots.json is not mapping
+             and retrieval_wait_snapshots.json is not string
+          else []) | length }}
+
+- name: Decide the retrieval outcome
+  ansible.builtin.set_fact:
+    retrieval_wait_state: >-
+      {{ 'done' if retrieval_wait_engine_status == 'finished' and (retrieval_wait_snapshot_count | int) > 0
+         else 'failed' if retrieval_wait_engine_status in ['failed', 'finished']
+         else 'timeout' }}
+    retrieval_wait_message: >-
+      {{ ('Copying data from the source database failed: ' ~ (retrieval_wait_alert | trim))
+           if retrieval_wait_engine_status == 'failed' and (retrieval_wait_alert | trim | length) > 0
+         else 'Copying data from the source database failed; the DBLab Engine reported no details.'
+           if retrieval_wait_engine_status == 'failed'
+         else 'Copying data finished but produced no snapshot.'
+           if retrieval_wait_engine_status == 'finished'
+         else 'Copying data from the source database did not finish within '
+              ~ ((dblab_cloud_retrieval_timeout | int) // 60) ~ ' minutes (last state: '
+              ~ (retrieval_wait_engine_status if retrieval_wait_engine_status | length > 0 else 'unknown') ~ ').' }}
+
+...

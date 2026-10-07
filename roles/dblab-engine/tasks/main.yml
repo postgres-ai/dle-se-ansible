@@ -17,6 +17,21 @@
       when: dir_item | default('', true) | length > 0
       tags: dblab_engine_conf
 
+    # Cloud deploy: the Platform chose this server's instance id and already holds a row for it,
+    # so the engine must find that id on its very first boot (it only generates one when the file
+    # is absent). 'copy' with 'content' writes no trailing newline; the engine does not trim.
+    # 'force: false' never replaces an id the engine already registered under.
+    - name: Write the instance ID chosen by the Platform
+      ansible.builtin.copy:
+        dest: "{{ dblab_engine_meta_path }}/instance_id"
+        content: "{{ dblab_cloud_instance_id }}"
+        owner: "{{ username }}"
+        group: "{{ username }}"
+        mode: "0644"
+        force: false
+      when: dblab_cloud_instance_id | default('', true) | length > 0
+      tags: dblab_engine_conf
+
     # if dblab_engine_preprocess_script is defined, copy the file
     - name: Copy the preprocessing script file to '{{ dblab_engine_base_path }}/preprocess.sh'
       ansible.builtin.template:
@@ -51,7 +66,7 @@
         dest: "{{ dblab_engine_config_path }}/server.yml"
         owner: "{{ username }}"
         group: "{{ username }}"
-        mode: "0644"
+        mode: "{{ dblab_engine_config_mode }}"
       notify: "restart dblab_server"
       when: dblab_engine_config_file is not defined or
             dblab_engine_config_file | length < 1
@@ -66,8 +81,10 @@
         mode: u=rw,g=rw,o=rw
         modification_time: preserve
         access_time: preserve
-      when: dblab_engine_config_file is not defined or
-            dblab_engine_config_file | length < 1
+      # With a source configured by the Platform the engine starts retrieving at once.
+      when:
+        - dblab_engine_config_file is not defined or dblab_engine_config_file | length < 1
+        - dblab_cloud_source_host | default('', true) | length < 1
   tags: dle, dblab_engine
 
 - name: Make sure handlers are flushed immediately
