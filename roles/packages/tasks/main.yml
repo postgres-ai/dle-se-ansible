@@ -1,4 +1,12 @@
 ---
+# A fresh box's cloud-init may still hold the apt lock or bring the network up
+# (#35). Bounded, and never fatal: an image without cloud-init just goes on.
+- name: Wait for cloud-init to finish (up to 5 minutes)
+  ansible.builtin.command: timeout 300 cloud-init status --wait
+  register: packages_cloud_init_wait
+  changed_when: false
+  failed_when: false
+
 # Debian
 - block:
     - name: Update apt cache

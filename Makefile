@@ -77,6 +77,10 @@ tests-fast: ## tests Ansible quickly
 	$(MAKE) test-cloud-deploy
 	$(MAKE) molecule-converge
 
+.PHONY: test-install-retries
+test-install-retries: ## tests that a fresh box retries its image pulls (#35)
+	source .venv/bin/activate && python3 tests/install-retries/test.py
+
 .PHONY: test-dblab-agent
 test-dblab-agent: ## Run the dblab-agent role tests (localhost only, no target host)
 	source .venv/bin/activate && ansible-playbook tests/dblab-agent/test.yml

@@ -8,6 +8,16 @@
         group: "{{ username }}"
         mode: "0644"
 
+    # A fresh box's network is sometimes briefly unreachable (#35): pull first when missing, retried.
+    - name: Pull the Netdata image (retried)
+      community.docker.docker_image:
+        name: "{{ netdata_image }}"
+        source: pull
+      register: netdata_image_pull
+      until: netdata_image_pull is succeeded
+      retries: 4
+      delay: 20
+
     - name: Start Netdata container
       community.docker.docker_container:
         name: netdata
