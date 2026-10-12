@@ -201,6 +201,14 @@ dblab_cloud_joe_signing_secret: "{{ lookup('ansible.builtin.env', 'DBLAB_CLOUD_J
 dblab_cloud_engine_token: "{{ lookup('ansible.builtin.env', 'DBLAB_CLOUD_ENGINE_TOKEN') }}"
 dblab_engine_config_mode: "0644"  # the cloud playbook renders it 0600
 dblab_engine_db_image: "postgresai/extended-postgres:{{ dblab_cloud_postgres_version if dblab_cloud_source_host | length > 0 else '15' }}"
+# The source's provider profile (platform-all#893), sent by the Platform for managed sources (Supabase,
+# RDS, Aurora) together with the matching dblab_engine_db_image. New in v1.7; the defaults render
+# exactly what earlier versions did.
+dblab_cloud_dump_custom_options: []
+dblab_cloud_restore_custom_options: ["--no-tablespaces", "--no-privileges", "--no-owner", "--exit-on-error"]
+dblab_cloud_skip_policies: true
+dblab_cloud_restore_preprocess_sql: ""  # run by the engine before the restore (roles the dump refers to)
+dblab_cloud_preload_libraries: "pg_stat_statements, pg_stat_kcache, auto_explain, logerrors"
 
 # Firewall: deny incoming except SSH. Off by default so existing installs are untouched.
 dblab_firewall_install: false

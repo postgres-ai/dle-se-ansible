@@ -109,6 +109,11 @@
         state: directory
         mode: "0700"
 
+    - name: Keep the role's defaults under their own name, to compare against
+      ansible.builtin.include_vars:
+        file: ../../vars/main.yml
+        name: role_defaults
+
     - name: Run the render cases
       ansible.builtin.include_tasks: run_render_case.yml
       loop:
@@ -138,6 +143,45 @@
             username: "postgres"
             databases: []
             image: "postgresai/extended-postgres:15"
+        - name: "a source with no profile: today's dump and restore options"
+          vars:
+            dblab_cloud_source_host: "db.example.com"
+            dblab_cloud_source_password: "s3cret-never-in-file"
+          expect:
+            host: "db.example.com"
+            port: 5432
+            dbname: "postgres"
+            username: "postgres"
+            databases: ["postgres"]
+            image: "postgresai/extended-postgres:17"
+            dump_options: null
+            restore_options: ["--no-tablespaces", "--no-privileges", "--no-owner", "--exit-on-error"]
+            skip_policies: true
+            preprocess_sql: ""
+            preload: "pg_stat_statements, pg_stat_kcache, auto_explain, logerrors"
+        - name: "a Supabase profile: its image, options, policies, pre-restore SQL and preload libraries"
+          vars:
+            dblab_cloud_source_host: "aws-1-eu-central-1.pooler.supabase.com"
+            dblab_cloud_source_username: "pgai_dblab_0a1b.ref"
+            dblab_cloud_source_password: "s3cret-never-in-file"
+            dblab_engine_db_image: "registry.gitlab.com/postgres-ai/se-images/supabase:17-0.8.0"
+            dblab_cloud_dump_custom_options: ["--exclude-schema=x y"]
+            dblab_cloud_restore_custom_options: ["--no-owner", "--exit-on-error"]
+            dblab_cloud_skip_policies: false
+            dblab_cloud_restore_preprocess_sql: "create role anon nologin; alter database \"postgres\" set search_path = \"$user\", public, extensions;"
+            dblab_cloud_preload_libraries: "pg_stat_statements, pg_cron, pg_net"
+          expect:
+            host: "aws-1-eu-central-1.pooler.supabase.com"
+            port: 5432
+            dbname: "postgres"
+            username: "pgai_dblab_0a1b.ref"
+            databases: ["postgres"]
+            image: "registry.gitlab.com/postgres-ai/se-images/supabase:17-0.8.0"
+            dump_options: ["--exclude-schema=x y"]
+            restore_options: ["--no-owner", "--exit-on-error"]
+            skip_policies: false
+            preprocess_sql: "create role anon nologin; alter database \"postgres\" set search_path = \"$user\", public, extensions;"
+            preload: "pg_stat_statements, pg_cron, pg_net"
       loop_control:
         loop_var: case
         label: "{{ case.name }}"
