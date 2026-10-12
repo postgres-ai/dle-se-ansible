@@ -116,7 +116,7 @@ databaseConfigs: &db_configs
     # Adding shared preload libraries, make sure that there are "pg_stat_statements, auto_explain, logerrors" in the list.
     # They are needed for query analysis and DB migration testing.
     # Note, if you are using PostgreSQL 9.6 and older, remove the logerrors extension from the list since it is not supported.
-    shared_preload_libraries: "pg_stat_statements, pg_stat_kcache, auto_explain, logerrors"
+    shared_preload_libraries: {{ dblab_cloud_preload_libraries | to_json }}
     # work_mem and all the Query Planning parameters – copy the values from the source.
     # Detailed guide: https://postgres.ai/docs/how-to-guides/administration/postgresql-configuration#postgresql-configuration-in-clones
     work_mem: "100MB"
@@ -266,6 +266,9 @@ retrieval:
 
         # Custom options for pg_dump command.
         customOptions:
+{% for option in dblab_cloud_dump_custom_options %}
+          - {{ option | to_json }}
+{% endfor %}
         #  - --no-publications
         #  - --no-subscriptions
 
@@ -314,17 +317,16 @@ retrieval:
           maxParallelWorkers: 2
 
           # Inline SQL. Queries run after scripts placed in 'queryPath'.
-          inline: ""
+          inline: {{ dblab_cloud_restore_preprocess_sql | to_json }}
 
         # Custom options for pg_restore command.
         customOptions:
-          - "--no-tablespaces"
-          - "--no-privileges"
-          - "--no-owner"
-          - "--exit-on-error"
+{% for option in dblab_cloud_restore_custom_options %}
+          - {{ option | to_json }}
+{% endfor %}
 
         # Option to skip policies when running pg_restore.
-        skipPolicies: true
+        skipPolicies: {{ dblab_cloud_skip_policies | bool | to_json }}
 
     logicalSnapshot:
       options:

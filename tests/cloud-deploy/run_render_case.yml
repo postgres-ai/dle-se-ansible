@@ -13,6 +13,12 @@
     dblab_cloud_source_username: "{{ case.vars.dblab_cloud_source_username | default('postgres') }}"
     dblab_cloud_source_password: "{{ case.vars.dblab_cloud_source_password }}"
     dblab_cloud_postgres_version: "{{ case.vars.dblab_cloud_postgres_version | default('17') }}"
+    dblab_engine_db_image: "{{ case.vars.dblab_engine_db_image | default(role_defaults.dblab_engine_db_image) }}"
+    dblab_cloud_dump_custom_options: "{{ case.vars.dblab_cloud_dump_custom_options | default(role_defaults.dblab_cloud_dump_custom_options) }}"
+    dblab_cloud_restore_custom_options: "{{ case.vars.dblab_cloud_restore_custom_options | default(role_defaults.dblab_cloud_restore_custom_options) }}"
+    dblab_cloud_skip_policies: "{{ case.vars.dblab_cloud_skip_policies | default(role_defaults.dblab_cloud_skip_policies) }}"
+    dblab_cloud_restore_preprocess_sql: "{{ case.vars.dblab_cloud_restore_preprocess_sql | default(role_defaults.dblab_cloud_restore_preprocess_sql) }}"
+    dblab_cloud_preload_libraries: "{{ case.vars.dblab_cloud_preload_libraries | default(role_defaults.dblab_cloud_preload_libraries) }}"
 
 - name: Read it back
   ansible.builtin.slurp:
@@ -39,5 +45,26 @@
       - rendered_yaml.global.database.dbname == case.expect.dbname
       - "'s3cret-never-in-file' not in rendered_text"
     fail_msg: "{{ case.name }}: conn={{ conn }}, dbs={{ dbs }}, image={{ rendered_yaml.databaseContainer.dockerImage }}"
+    quiet: true
+
+- name: "Assert the profile: {{ case.name }}"
+  when: case.expect.restore_options is defined
+  vars:
+    dump: "{{ rendered_yaml.retrieval.spec.logicalDump.options }}"
+    restore: "{{ rendered_yaml.retrieval.spec.logicalRestore.options }}"
+  ansible.builtin.assert:
+    that:
+      - dump.customOptions == case.expect.dump_options
+      - restore.customOptions == case.expect.restore_options
+      - restore.skipPolicies == case.expect.skip_policies
+      - restore.queryPreprocessing.inline == case.expect.preprocess_sql
+      - restore.configs.shared_preload_libraries == case.expect.preload
+      - rendered_yaml.provision.dockerImage == case.expect.image
+      - dump.dockerImage == case.expect.image
+      - restore.dockerImage == case.expect.image
+    fail_msg: >-
+      {{ case.name }}: dump={{ dump.customOptions }}, restore={{ restore.customOptions }},
+      skip={{ restore.skipPolicies }}, inline={{ restore.queryPreprocessing.inline }},
+      preload={{ restore.configs.shared_preload_libraries }}
     quiet: true
 ...
