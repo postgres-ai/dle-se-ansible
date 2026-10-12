@@ -1,6 +1,36 @@
 ---
 
 - block:
+    # A fresh box's network is sometimes briefly unreachable (#35): pull first when missing, retried.
+    - name: Pull the DBLab Engine image (retried)
+      community.docker.docker_image:
+        name: "{{ dblab_engine_image }}"
+        source: pull
+      register: _pull_dblab_engine_image
+      until: _pull_dblab_engine_image is succeeded
+      retries: 4
+      delay: 20
+
+    # A fresh box's network is sometimes briefly unreachable (#35): pull first when missing, retried.
+    - name: Pull the DBLab UI (the engine starts it) image (retried)
+      community.docker.docker_image:
+        name: "{{ dblab_engine_ui_image }}"
+        source: pull
+      register: _pull_dblab_engine_ui_image
+      until: _pull_dblab_engine_ui_image is succeeded
+      retries: 4
+      delay: 20
+
+    # A fresh box's network is sometimes briefly unreachable (#35): pull first when missing, retried.
+    - name: Pull the extended Postgres (the engine starts it) image (retried)
+      community.docker.docker_image:
+        name: "{{ dblab_engine_db_image }}"
+        source: pull
+      register: _pull_dblab_engine_db_image
+      until: _pull_dblab_engine_db_image is succeeded
+      retries: 4
+      delay: 20
+
     - name: Restart DBLab server container
       community.docker.docker_container:
         name: "{{ dblab_engine_container_name }}"

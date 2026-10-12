@@ -167,6 +167,16 @@
   register: joe_agent_config_written
   diff: false  # the file is a credential
 
+# A fresh box's network is sometimes briefly unreachable (#35): pull first when missing, retried.
+- name: Pull the Joe agent image (retried)
+  community.docker.docker_image:
+    name: "{{ joe_agent_image }}"
+    source: pull
+  register: _pull_joe_agent_image
+  until: _pull_joe_agent_image is succeeded
+  retries: 4
+  delay: 20
+
 # Host networking: Joe listens on loopback only, and the agent has no inbound port
 # of its own, so nothing is exposed by it and nothing collides with the DBLab
 # agent that may be running beside it. The health file the agent writes lives on

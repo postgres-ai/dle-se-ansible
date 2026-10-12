@@ -39,6 +39,16 @@
   tags: joe, joe_conf
 
 - block:
+    # A fresh box's network is sometimes briefly unreachable (#35): pull first when missing, retried.
+    - name: Pull the Joe Bot image (retried)
+      community.docker.docker_image:
+        name: "{{ joe_image }}"
+        source: pull
+      register: _pull_joe_image
+      until: _pull_joe_image is succeeded
+      retries: 4
+      delay: 20
+
     - name: Ensure that Joe Bot container is running
       community.docker.docker_container:
         name: "{{ joe_container_name }}"
