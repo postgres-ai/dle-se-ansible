@@ -1,0 +1,34 @@
+---
+# gcp.yml's decisions, kept apart so tests/cloud-deploy can check them without a cloud.
+
+# Project: gcp_project, else the service account's own project, else the first one it can see.
+- name: "Set variable: gcp_project_id"
+  ansible.builtin.set_fact:
+    gcp_project_id: >-
+      {{ gcp_project if (gcp_project | default('', true) | length > 0)
+         else ((gcp_service_account_contents if gcp_service_account_contents is mapping
+                else gcp_service_account_contents | from_json).project_id | default('')) }}
+  no_log: true
+
+# Zones: a zone is used as is; a region means zone b (deploy_dle.yml), or for the
+# Platform's servers up to three of the region's zones (gcp_region_zones, read by
+# gcp.yml; regions differ: us-east1 has b, c, d), b and c first, the next one tried
+# when a zone cannot create the server; a destroy looks in every zone of the region. Before
+# they are read: b, c, a.
+- name: "Set variable: gcp_zones"
+  ansible.builtin.set_fact:
+    gcp_zones: >-
+      {{ [server_location] if server_location is match('.*-[a-z]$')
+         else ((((gcp_region_zones | default([]) | select('match', '.*-b$') | list)
+                 + (gcp_region_zones | default([]) | select('match', '.*-c$') | list)
+                 + (gcp_region_zones | default([]) | reject('match', '.*-[bc]$') | sort | list))[:(3 if (state | default('present')) != 'absent' else 99)]
+                if gcp_region_zones | default([]) | length > 0
+                else [server_location ~ '-b', server_location ~ '-c', server_location ~ '-a'])
+               if dblab_cloud_per_server_firewall | bool else [server_location ~ '-b']) }}
+    gcp_region: "{{ server_location | regex_replace('-[a-z]$', '') if server_location is match('.*-[a-z]$') else server_location }}"
+    gcp_labels: >-
+      {{ {'env': 'dblab', 'server': server_name | lower}
+         | combine({'pgai_org': dblab_cloud_org_id | string, 'pgai_instance': dblab_cloud_row_id | string}
+                   if dblab_cloud_row_id | default('', true) | string | length > 0 else {}) }}
+
+...

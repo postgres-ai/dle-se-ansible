@@ -1,0 +1,24 @@
+---
+- name: Work out the GCP facts
+  ansible.builtin.include_tasks: "{{ gcp_tasks }}/gcp_facts.yml"
+  vars:
+    server_location: "{{ case.location }}"
+    server_name: "{{ case.server_name | default('Dblab-3-7-abc123') }}"
+    dblab_cloud_per_server_firewall: "{{ case.per_server }}"
+    dblab_cloud_row_id: "{{ case.row_id | default('') }}"
+    dblab_cloud_org_id: "{{ case.org_id | default('') }}"
+    gcp_project: "{{ case.gcp_project | default('') }}"
+    gcp_service_account_contents: "{{ case.sa | default('{}') }}"
+    gcp_region_zones: "{{ case.region_zones | default([]) }}"
+    state: "{{ case.state | default('present') }}"
+
+- name: "Assert: {{ case.name }}"
+  ansible.builtin.assert:
+    that:
+      - gcp_zones == case.expect_zones
+      - gcp_region == case.expect_region
+      - gcp_project_id == case.expect_project
+      - gcp_labels == case.expect_labels
+    fail_msg: "{{ case.name }}: zones={{ gcp_zones }} region={{ gcp_region }} project={{ gcp_project_id }} labels={{ gcp_labels }}"
+    quiet: true
+...

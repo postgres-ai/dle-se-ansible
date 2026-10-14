@@ -5,3 +5,4 @@
 /packer/example.com.key
 cloudformation/output/*.yaml
 
+.venv/

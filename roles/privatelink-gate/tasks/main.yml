@@ -1,0 +1,120 @@
+---
+# Before the first copy of a private RDS (platform-all#925): the endpoint name resolves to our
+# PrivateLink address, the server's certificate is for that name, a verify-full login as the dump
+# role works, and the database carries the ownership marker of this deploy's prepare SQL. The same
+# checks as monitoring's gate; each failure says what to fix.
+
+- name: Check the PrivateLink path
+  when: dblab_cloud_privatelink | default({}) | length > 0
+  vars:
+    _gate_ep: "{{ dblab_cloud_privatelink.rds_endpoint }}"
+    # libpq takes the connection from the environment: no value (a database name from the
+    # user's URL) can add or override a keyword such as host=.
+    _gate_pg_env:
+      PGHOST: "{{ dblab_cloud_privatelink.rds_endpoint }}"
+      PGPORT: "{{ dblab_cloud_source_port | string }}"
+      PGDATABASE: "{{ dblab_cloud_source_dbname }}"
+      PGUSER: "{{ dblab_cloud_source_username }}"
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: "{{ dblab_cloud_privatelink_ca_path }}"
+      PGCONNECT_TIMEOUT: "15"
+      PGPASSWORD: "{{ dblab_cloud_source_password }}"
+  block:
+    - name: Install the Postgres client for the checks
+      ansible.builtin.apt:
+        name: postgresql-client
+        state: present
+        update_cache: true
+      register: _gate_apt
+      until: _gate_apt is succeeded
+      retries: 3
+      delay: 10
+
+    - name: Fetch the RDS certificate authorities
+      ansible.builtin.get_url:
+        url: "{{ dblab_cloud_privatelink_ca_url }}"
+        dest: "{{ dblab_cloud_privatelink_ca_path }}"
+        mode: "0644"
+      register: _gate_ca
+      until: _gate_ca is succeeded
+      retries: 3
+      delay: 10
+
+    - name: Resolve the RDS endpoint
+      ansible.builtin.command:
+        argv: [getent, ahostsv4, "{{ _gate_ep }}"]
+      register: _gate_dns
+      changed_when: false
+      failed_when: false
+      until: (_gate_dns.stdout.split() | first | default('')) == dblab_cloud_privatelink.eni_ip
+      retries: 12
+      delay: 10
+
+    - name: Fail when the RDS endpoint does not resolve to its PrivateLink address
+      ansible.builtin.fail:
+        msg: >-
+          {{ _gate_ep }} resolves to {{ (_gate_dns.stdout.split() | first) | default('nothing') }}, not to its
+          PrivateLink address {{ dblab_cloud_privatelink.eni_ip }}.
+      when: (_gate_dns.stdout.split() | first | default('')) != dblab_cloud_privatelink.eni_ip
+
+    - name: Read the server certificate's names
+      ansible.builtin.shell: |
+        set -o pipefail
+        timeout 20 openssl s_client -starttls postgres -connect {{ _gate_ep | quote }}:{{ dblab_cloud_source_port | int }} \
+          -servername {{ _gate_ep | quote }} </dev/null 2>/dev/null | openssl x509 -noout -ext subjectAltName
+      args:
+        executable: /bin/bash
+      register: _gate_san
+      changed_when: false
+      failed_when: false
+      # A new endpoint takes a while to pass traffic (monitoring's gate warms up the same way).
+      until: _gate_san.rc == 0 and _gate_san.stdout is search('DNS:')
+      retries: 12
+      delay: 10
+
+    - name: Fail when the certificate is not for the RDS endpoint
+      ansible.builtin.fail:
+        msg: >-
+          The server behind the PrivateLink endpoint did not present a certificate for {{ _gate_ep }}:
+          the endpoint service may point at another database.
+      when: >-
+        _gate_san.rc != 0
+        or not (_gate_san.stdout is search('DNS:' ~ (_gate_ep | regex_escape) ~ '(,|$)', multiline=True)
+                or _gate_san.stdout is search('DNS:\*\.' ~ (_gate_ep.split('.', 1)[1] | regex_escape) ~ '(,|$)', multiline=True))
+
+    - name: Log in with verified TLS and read the ownership marker
+      ansible.builtin.command:
+        argv:
+          - psql
+          - -XAtc
+          - >-
+            select nonce from postgres_ai.dblab_ownership where org_id = {{ dblab_cloud_privatelink.org_id | int }}
+            order by issued_at desc limit 1
+      environment: "{{ _gate_pg_env }}"
+      register: _gate_owner
+      changed_when: false
+      failed_when: false
+      # Only a connection that does not answer is retried; a refused login or a missing marker is final.
+      until: _gate_owner.rc == 0 or (_gate_owner.stderr | default('')) is not search('timeout expired|could not connect|Connection refused')
+      retries: 6
+      delay: 10
+      no_log: true
+
+    - name: Fail when the login over PrivateLink fails
+      ansible.builtin.fail:
+        msg: >-
+          {{ 'Could not log in to the RDS as ' ~ dblab_cloud_source_username ~ ': run the prepare SQL from the wizard on it, then deploy again.'
+             if (_gate_owner.stderr | default('')) is search('password authentication failed|role .* does not exist')
+             else 'Could not connect to the RDS over PrivateLink with verified TLS: '
+                  ~ ((_gate_owner.stderr | default('')).splitlines() | first | default('no answer')) }}
+      when:
+        - _gate_owner.rc != 0
+        - (_gate_owner.stderr | default('')) is not search('dblab_ownership|permission denied for (schema|table)')
+
+    - name: Fail when the database does not carry this deploy's ownership marker
+      ansible.builtin.fail:
+        msg: >-
+          This RDS was not prepared with this deploy's SQL. Run the prepare SQL from step 1 of the wizard on it,
+          then deploy again.
+      when: (_gate_owner.rc == 0 and (_gate_owner.stdout | trim) != dblab_cloud_privatelink.nonce) or _gate_owner.rc != 0
+...

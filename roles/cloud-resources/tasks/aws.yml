@@ -26,6 +26,14 @@
         ansible_become: false
       run_once: true
 
+# Tags: the Platform's ids on a cloud deploy, so its servers can be found by owner.
+- name: "Set variable: aws_resource_tags"
+  ansible.builtin.set_fact:
+    aws_resource_tags: >-
+      {{ {'env': 'dblab', 'server': server_name | lower}
+         | combine({'pgai_org': dblab_cloud_org_id | string, 'pgai_instance': dblab_cloud_row_id | string}
+                   if dblab_cloud_row_id | default('', true) | string | length > 0 else {}) }}
+
 # SSH key
 - block:
     # Delete the temporary ssh key from the cloud (if exists)
@@ -50,9 +58,7 @@
         key_material: "{{ ssh_key_content }}"
         region: "{{ server_location }}"
         state: present
-        resource_tags:
-          env: dblab
-          server: "{{ server_name | lower }}"
+        resource_tags: "{{ aws_resource_tags }}"
       register: ssh_key_result
       when:
         - ssh_key_name | length > 0
@@ -61,13 +67,52 @@
 
 # Create (if state is present)
 - block:
+    # An image name instead of an AMI id: the current Ubuntu 24.04 AMI of this region. A new
+    # variable: set_fact cannot override server_image when it comes as an extra-var.
+    - name: "AWS: Find the Ubuntu 24.04 AMI in '{{ server_location }}'"
+      ansible.builtin.set_fact:
+        aws_ami_id: >-
+          {{ lookup('amazon.aws.ssm_parameter',
+                    '/aws/service/canonical/ubuntu/server/24.04/stable/current/amd64/hvm/ebs-gp3/ami-id',
+                    region=server_location)
+             if server_image == 'ubuntu-24.04' else server_image }}
+
+    # The Platform's servers: a default-VPC subnet in a zone that offers the instance type.
+    - name: "AWS: Find a subnet whose zone offers '{{ server_type }}'"
+      ansible.builtin.script:
+        cmd: "aws_pick_subnet.py {{ server_location | quote }} {{ server_type | quote }}"
+        executable: python3
+      register: aws_subnet_pick
+      changed_when: false
+      when:
+        - dblab_cloud_per_server_firewall | bool
+        - server_network | length < 1
+
+    - name: "AWS: Use the subnet found"
+      ansible.builtin.set_fact:
+        aws_subnet_choice: "{{ aws_subnet_pick.stdout | from_json }}"
+      when: aws_subnet_pick.stdout is defined
+
+    - name: "AWS: Stop when no subnet fits"
+      ansible.builtin.fail:
+        msg: "{{ aws_subnet_choice.error }}"
+      when: aws_subnet_choice.error is defined
+
+    - name: "Set variable: vpc_id, server_network"
+      ansible.builtin.set_fact:
+        vpc_id: "{{ aws_subnet_choice.vpc_id }}"
+        server_network: "{{ aws_subnet_choice.subnet_id }}"
+      when: aws_subnet_choice.subnet_id is defined
+
     # if server_network is specified, get vpc id for this subnet
     - name: "AWS: Gather information about VPC for '{{ server_network }}'"
       amazon.aws.ec2_vpc_subnet_info:
         region: "{{ server_location }}"
         subnet_ids: "{{ server_network }}"
       register: vpc_subnet_info
-      when: server_network | length > 0
+      when:
+        - server_network | length > 0
+        - aws_subnet_choice.subnet_id is not defined
 
     - name: "Set variable: vpc_id"
       ansible.builtin.set_fact:
@@ -132,8 +177,26 @@
           from the AWS console before retrying.
       when: existing_instance_check.instances | length > 0
 
-    # Security Group
+    # Security Group: the Platform's servers get their own, SSH only, removed with the server.
+    - name: "AWS: Create the security group '{{ server_name | lower }}-sg' (SSH only)"
+      amazon.aws.ec2_security_group:
+        access_key: "{{ lookup('ansible.builtin.env', 'AWS_ACCESS_KEY_ID') }}"
+        secret_key: "{{ lookup('ansible.builtin.env', 'AWS_SECRET_ACCESS_KEY') }}"
+        name: "{{ server_name | lower }}-sg"
+        state: present
+        description: "SSH to the DBLab server {{ server_name | lower }}"
+        vpc_id: "{{ vpc_id }}"
+        region: "{{ server_location }}"
+        rules:
+          - proto: tcp
+            ports:
+              - 22
+            cidr_ip: 0.0.0.0/0
+        resource_tags: "{{ aws_resource_tags }}"
+      when: dblab_cloud_per_server_firewall | bool
+
     - name: "AWS: Create DBLab Security Group"
+      when: not dblab_cloud_per_server_firewall | bool
       amazon.aws.ec2_security_group:
         name: dblab_engine_security_group
         state: present
@@ -160,10 +223,10 @@
         name: "{{ server_name | lower }}"
         state: present
         instance_type: "{{ server_type }}"
-        image_id: "{{ server_image }}"
+        image_id: "{{ aws_ami_id }}"
         key_name: "{{ ssh_key_name }}"
         region: "{{ server_location }}"
-        security_group: dblab_engine_security_group
+        security_group: "{{ (server_name | lower ~ '-sg') if dblab_cloud_per_server_firewall | bool else 'dblab_engine_security_group' }}"
         vpc_subnet_id: "{{ server_network }}"
         network:
           assign_public_ip: true
@@ -176,12 +239,10 @@
               delete_on_termination: true
           - device_name: /dev/sdb
             ebs:
-              volume_type: "{{ volume_type | default('gp3') }}"
+              volume_type: "{{ volume_type if volume_type | default('', true) | length > 0 else 'gp3' }}"
               volume_size: "{{ volume_size | int }}"
               delete_on_termination: true
-        resource_tags:
-          env: dblab
-          server: "{{ server_name | lower }}"
+        resource_tags: "{{ aws_resource_tags }}"
       register: ec2_result
       until:
         - ec2_result.instances[0].public_ip_address is defined
@@ -250,13 +311,38 @@
     - ssh_key_name == dblab_tmp_ssh_key_name
 
 # Delete (if state is absent)
-- name: "AWS: Delete EC2 instance '{{ server_name }}'"
-  amazon.aws.ec2_instance:
-    access_key: "{{ lookup('ansible.builtin.env', 'AWS_ACCESS_KEY_ID') }}"
-    secret_key: "{{ lookup('ansible.builtin.env', 'AWS_SECRET_ACCESS_KEY') }}"
-    name: "{{ server_name | lower }}"
-    region: "{{ server_location }}"
-    state: absent
+- block:
+    - name: "AWS: Delete EC2 instance '{{ server_name }}'"
+      amazon.aws.ec2_instance:
+        access_key: "{{ lookup('ansible.builtin.env', 'AWS_ACCESS_KEY_ID') }}"
+        secret_key: "{{ lookup('ansible.builtin.env', 'AWS_SECRET_ACCESS_KEY') }}"
+        name: "{{ server_name | lower }}"
+        region: "{{ server_location }}"
+        state: absent
+        wait: true
+
+    # A deploy that died before removing its temporary key leaves it tagged with the server.
+    - name: "AWS: Remove SSH keys left by '{{ server_name }}'"
+      ansible.builtin.script:
+        cmd: "aws_delete_server_keys.py {{ server_location | quote }} {{ server_name | lower | quote }}"
+        executable: python3
+      register: aws_leftover_keys
+      changed_when: aws_leftover_keys.stdout | trim | length > 0
+      when: dblab_cloud_per_server_firewall | bool
+
+    # The group stays attached until the instance is gone.
+    - name: "AWS: Delete the security group '{{ server_name | lower }}-sg'"
+      amazon.aws.ec2_security_group:
+        access_key: "{{ lookup('ansible.builtin.env', 'AWS_ACCESS_KEY_ID') }}"
+        secret_key: "{{ lookup('ansible.builtin.env', 'AWS_SECRET_ACCESS_KEY') }}"
+        name: "{{ server_name | lower }}-sg"
+        region: "{{ server_location }}"
+        state: absent
+      register: aws_sg_deleted
+      until: aws_sg_deleted is succeeded
+      retries: 12
+      delay: 10
+      when: dblab_cloud_per_server_firewall | bool
   when: state == 'absent'
 
 ...

@@ -28,21 +28,32 @@
             name: cloud-resources
 
         # A deploy that failed after uploading its temporary SSH key leaves it in the project; the
-        # keys this playbook's server used are labelled with its name.
-        - name: "Hetzner Cloud: Find SSH keys left by this server"
-          hetzner.hcloud.hcloud_ssh_key_info:
-            api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
-            label_selector: "server={{ server_name | lower }}"
-          register: destroy_leftover_keys
+        # keys this playbook's server used are labelled with its name. AWS removes its leftover keys
+        # in cloud-resources; GCP keeps keys in the server's metadata.
+        - name: Remove the Hetzner SSH keys left by this server
+          when: provision | lower == 'hetzner'
+          block:
+            - name: "Hetzner Cloud: Find SSH keys left by this server"
+              hetzner.hcloud.hcloud_ssh_key_info:
+                api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+                label_selector: "server={{ server_name | lower }}"
+              register: destroy_leftover_keys
+              until: destroy_leftover_keys is succeeded
+              retries: 5
+              delay: 10
 
-        - name: "Hetzner Cloud: Remove SSH keys left by this server"
-          hetzner.hcloud.hcloud_ssh_key:
-            api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
-            name: "{{ item.name }}"
-            state: absent
-          loop: "{{ destroy_leftover_keys.hcloud_ssh_key_info | default([]) }}"
-          loop_control:
-            label: "{{ item.name }}"
+            - name: "Hetzner Cloud: Remove SSH keys left by this server"
+              hetzner.hcloud.hcloud_ssh_key:
+                api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
+                name: "{{ item.name }}"
+                state: absent
+              loop: "{{ destroy_leftover_keys.hcloud_ssh_key_info | default([]) }}"
+              loop_control:
+                label: "{{ item.name }}"
+              register: destroy_key_removed
+              until: destroy_key_removed is succeeded
+              retries: 5
+              delay: 10
 
         - name: Report the server destroyed
           ansible.builtin.include_role:
