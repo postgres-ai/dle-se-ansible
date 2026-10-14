@@ -290,4 +290,211 @@
         fail_msg: "rescue={{ deploy_task.rescue | to_json }}"
         quiet: true
 
+# platform-all#925: the Platform's GCP servers try zones b, c, a; deploy_dle.yml keeps zone b.
+- name: "Cloud deploy | GCP project, zones and labels"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    gcp_tasks: "{{ playbook_dir }}/../../roles/cloud-resources/tasks"
+  tasks:
+    - name: Run the GCP facts cases
+      ansible.builtin.include_tasks: run_gcp_facts_case.yml
+      loop:
+        - name: "the Platform's server in a region: zones b, c, a; the account's project; owner labels"
+          location: europe-west3
+          per_server: true
+          row_id: "7"
+          org_id: "3"
+          sa: '{"project_id": "acct-project"}'
+          expect_zones: [europe-west3-b, europe-west3-c, europe-west3-a]
+          expect_region: europe-west3
+          expect_project: acct-project
+          expect_labels: { env: dblab, server: dblab-3-7-abc123, pgai_org: "3", pgai_instance: "7" }
+        - name: "the region's own zones (us-east1 has no zone a): b, c first, at most three"
+          location: us-east1
+          per_server: true
+          region_zones: [us-east1-d, us-east1-c, us-east1-b]
+          sa: '{"project_id": "acct-project"}'
+          expect_zones: [us-east1-b, us-east1-c, us-east1-d]
+          expect_region: us-east1
+          expect_project: acct-project
+          expect_labels: { env: dblab, server: dblab-3-7-abc123 }
+        - name: "a region with zones a-f: b, c, then a"
+          location: us-central1
+          per_server: true
+          region_zones: [us-central1-a, us-central1-b, us-central1-c, us-central1-f]
+          sa: '{"project_id": "acct-project"}'
+          expect_zones: [us-central1-b, us-central1-c, us-central1-a]
+          expect_region: us-central1
+          expect_project: acct-project
+          expect_labels: { env: dblab, server: dblab-3-7-abc123 }
+        - name: "a destroy looks in every zone of the region"
+          location: us-central1
+          per_server: true
+          state: absent
+          region_zones: [us-central1-a, us-central1-b, us-central1-c, us-central1-f]
+          sa: '{"project_id": "acct-project"}'
+          expect_zones: [us-central1-b, us-central1-c, us-central1-a, us-central1-f]
+          expect_region: us-central1
+          expect_project: acct-project
+          expect_labels: { env: dblab, server: dblab-3-7-abc123 }
+        - name: "deploy_dle.yml in a region: zone b only, no owner labels"
+          location: us-central1
+          per_server: false
+          expect_zones: [us-central1-b]
+          expect_region: us-central1
+          expect_project: ""
+          expect_labels: { env: dblab, server: dblab-3-7-abc123 }
+        - name: "a zone is used as is; gcp_project wins over the account's"
+          location: us-east1-c
+          per_server: true
+          gcp_project: chosen
+          sa: '{"project_id": "acct-project"}'
+          expect_zones: [us-east1-c]
+          expect_region: us-east1
+          expect_project: chosen
+          expect_labels: { env: dblab, server: dblab-3-7-abc123 }
+      loop_control:
+        loop_var: case
+        label: "{{ case.name }}"
+
+# platform-all#925: an AWS or GCP destroy never calls Hetzner; the Hetzner calls retry.
+- name: "Cloud deploy | destroy cleans Hetzner keys only on Hetzner"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    plays: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../destroy_dle_cloud.yml') | from_yaml }}"
+    destroy_block: "{{ (plays | first).tasks | selectattr('name', 'equalto', 'Destroy') | first }}"
+    hetzner_block: "{{ destroy_block.block | selectattr('name', 'equalto', 'Remove the Hetzner SSH keys left by this server') | list }}"
+  tasks:
+    - name: "Assert: the key cleanup is one block, run for Hetzner only, and every call retries"
+      ansible.builtin.assert:
+        that:
+          - hetzner_block | length == 1
+          - hetzner_block[0].when is search("provision \| lower == 'hetzner'")
+          - hetzner_block[0].block | length == 2
+          - hetzner_block[0].block | selectattr('retries', 'defined') | list | length == 2
+          - destroy_block.block | selectattr('hetzner.hcloud.hcloud_ssh_key_info', 'defined') | list | length == 0
+        fail_msg: "destroy={{ destroy_block | to_json }}"
+        quiet: true
+
+# platform-all#925: the Platform's AWS and GCP servers get their own SSH-only firewall; deploy_dle.yml keeps the shared one.
+- name: "Cloud deploy | per-server firewalls"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    aws: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../roles/cloud-resources/tasks/aws.yml') | from_yaml }}"
+    aws_blocks: "{{ aws | selectattr('block', 'defined') | selectattr('when', 'defined') | list }}"
+    aws_create: "{{ (aws_blocks | selectattr('when', 'equalto', \"state == 'present'\") | list)[1].block }}"
+    aws_delete: "{{ (aws_blocks | selectattr('when', 'equalto', \"state == 'absent'\") | first).block }}"
+    own_sg: "{{ aws_create | selectattr('name', 'search', 'SSH only') | first }}"
+    shared_sg: "{{ aws_create | selectattr('name', 'equalto', 'AWS: Create DBLab Security Group') | first }}"
+    sg_delete: "{{ aws_delete | selectattr('name', 'search', 'Delete the security group') | first }}"
+    gcp: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../roles/cloud-resources/tasks/gcp.yml') | from_yaml }}"
+    gcp_blocks: "{{ gcp | selectattr('block', 'defined') | selectattr('when', 'defined') | list }}"
+    gcp_delete: "{{ (gcp_blocks | selectattr('when', 'equalto', \"state == 'absent'\") | first).block }}"
+    shared_rule_delete: "{{ gcp_delete | selectattr('name', 'equalto', \"GCP: Delete firewall rule 'dblab-allow-ssh'\") | first }}"
+    own_rule_delete: "{{ gcp_delete | selectattr('name', 'search', '-ssh.$') | first }}"
+  tasks:
+    - name: "Assert: AWS opens only 22 on the server's own group and removes it; GCP removes only its own rule"
+      ansible.builtin.assert:
+        that:
+          - own_sg['amazon.aws.ec2_security_group'].name is search('-sg')
+          - own_sg['amazon.aws.ec2_security_group'].rules | length == 1
+          - own_sg['amazon.aws.ec2_security_group'].rules[0].ports == [22]
+          - shared_sg['amazon.aws.ec2_security_group'].name == 'dblab_engine_security_group'
+          - sg_delete['amazon.aws.ec2_security_group'].state == 'absent'
+          - sg_delete.when == 'dblab_cloud_per_server_firewall | bool'
+          - sg_delete.retries is defined
+          - shared_rule_delete.when == 'not dblab_cloud_per_server_firewall | bool'
+          - own_rule_delete.when == 'dblab_cloud_per_server_firewall | bool'
+        fail_msg: "own={{ own_sg | to_json }} shared={{ shared_sg | to_json }}"
+        quiet: true
+
+# platform-all#925: set_fact cannot override an extra-var, so the role never "replaces" a variable the
+# Platform sends (the ubuntu-24.04 image name stayed in place and EC2 refused it).
+- name: "Cloud deploy | no set_fact of a variable the Platform sends"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    sent: [server_name, server_type, server_image, server_location, volume_size, server_network, provision]
+    files: [aws.yml, gcp.yml, gcp_facts.yml, gcp_create_in_zone.yml, hetzner.yml, main.yml]
+  tasks:
+    - name: Collect every set_fact key in the cloud-resources tasks
+      ansible.builtin.command:
+        argv: "{{ ['python3', playbook_dir ~ '/set_fact_keys.py']
+                  + (files | map('regex_replace', '^', playbook_dir ~ '/../../roles/cloud-resources/tasks/') | list) }}"
+      register: set_fact_scan
+      changed_when: false
+
+    - name: Read them
+      ansible.builtin.set_fact:
+        set_keys: "{{ set_fact_scan.stdout | from_json }}"
+
+    - name: "Assert: none of them is a variable the Platform sends"
+      ansible.builtin.assert:
+        that:
+          - set_keys | length > 10
+          - set_keys | intersect(sent) | list == ['server_network']
+        fail_msg: "set_fact keys: {{ set_keys | unique | sort }}"
+        quiet: true
+
+# platform-all#925, found by the first GCP story deploy: an include's `when` is evaluated for every zone
+# before any runs (so each zone created a server), and a module given service_account_contents masks
+# the project id in what it returns (so a returned selfLink named project "********").
+- name: "Cloud deploy | GCP stops at the first zone, and never reuses a returned selfLink"
+  hosts: localhost
+  gather_facts: false
+  vars:
+    tasks_dir: "{{ playbook_dir }}/../../roles/cloud-resources/tasks"
+    zone_tasks: "{{ lookup('ansible.builtin.file', tasks_dir ~ '/gcp_create_in_zone.yml') | from_yaml }}"
+    gcp_text: >-
+      {{ lookup('ansible.builtin.file', tasks_dir ~ '/gcp.yml') ~ lookup('ansible.builtin.file', tasks_dir ~ '/gcp_create_in_zone.yml') }}
+  tasks:
+    - name: "Assert: one guarded block per zone; no selfLink taken from a module's result"
+      ansible.builtin.assert:
+        that:
+          - zone_tasks | length == 1
+          - zone_tasks[0].when == 'gcp_server_zone is not defined'
+          - gcp_text is not search("attribute='selfLink'")
+          # A skipped later zone overwrites its registered result: gcp.yml reads the fact the zone set.
+          - lookup('ansible.builtin.file', tasks_dir ~ '/gcp.yml') is not search('server_result')
+          - gcp_text is not search('source:\\s+"\\{\\{ gcp_disk_result \\}\\}"')
+        fail_msg: "zone tasks: {{ zone_tasks | map(attribute='when', default='-') | list }}"
+        quiet: true
+
+# platform-all#925: a private RDS is checked before anything copies from it; a public one is not.
+- name: "Cloud deploy | the PrivateLink gate runs before the engine, and only for a private RDS"
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    plays: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../../deploy_dle_cloud.yml') | from_yaml }}"
+    steps: "{{ ((plays | selectattr('name', 'equalto', 'Deploy DBLab Engine and Joe') | first).tasks | first).block | map(attribute='name') | list }}"
+  tasks:
+    - name: "Assert: the gate comes after the packages and before the engine"
+      ansible.builtin.assert:
+        that:
+          - "'Run role privatelink-gate' in steps"
+          - steps.index('Run role privatelink-gate') > steps.index('Run role packages')
+          - steps.index('Run role privatelink-gate') < steps.index('Run role dblab-engine')
+        fail_msg: "steps: {{ steps }}"
+        quiet: true
+
+    - name: "Assert: the gate waits for a new endpoint to pass traffic before judging the certificate"
+      ansible.builtin.assert:
+        that:
+          - (gate | selectattr('name', 'equalto', "Read the server certificate's names") | first).retries | int >= 6
+          - (gate | selectattr('name', 'equalto', "Read the server certificate's names") | first).until is defined
+        quiet: true
+      vars:
+        gate: "{{ (lookup('ansible.builtin.file', playbook_dir ~ '/../../roles/privatelink-gate/tasks/main.yml') | from_yaml | first).block }}"
+
+    - name: A public source runs no check
+      ansible.builtin.include_role:
+        name: "{{ playbook_dir }}/../../roles/privatelink-gate"
+      vars:
+        dblab_cloud_privatelink: { }
+
 ...

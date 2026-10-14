@@ -1,0 +1,7 @@
+---
+# A private RDS reached over PrivateLink (platform-all#925), sent by the Platform:
+# {eni_ip, rds_endpoint, org_id, nonce}. Empty: a public source, nothing to check.
+dblab_cloud_privatelink: { }
+dblab_cloud_privatelink_ca_url: "https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem"
+dblab_cloud_privatelink_ca_path: "/etc/ssl/certs/rds-global-bundle.pem"
+...

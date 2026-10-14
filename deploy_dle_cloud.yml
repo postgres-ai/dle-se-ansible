@@ -8,7 +8,8 @@
 #
 # Secrets come from the environment, never from extra-vars (they appear in the task log):
 # DBLAB_CLOUD_NOTIFY_TOKEN, DBLAB_CLOUD_SOURCE_PASSWORD, DBLAB_CLOUD_JOE_SIGNING_SECRET,
-# DBLAB_CLOUD_ENGINE_TOKEN, HCLOUD_API_TOKEN.
+# DBLAB_CLOUD_ENGINE_TOKEN, and the cloud's credentials (HCLOUD_API_TOKEN, AWS_ACCESS_KEY_ID +
+# AWS_SECRET_ACCESS_KEY, or GCP_SERVICE_ACCOUNT_B64).
 
 - name: Check the cloud deploy request
   hosts: localhost
@@ -131,6 +132,16 @@
           ansible.builtin.include_role:
             name: authorized-keys
 
+        # AWS logs in as ubuntu; the Platform tells users to connect as root on every cloud.
+        - name: Add the Platform's SSH keys for root too
+          ansible.posix.authorized_key:
+            user: root
+            key: "{{ item }}"
+            state: present
+          loop: "{{ ssh_public_keys.splitlines() }}"
+          no_log: true
+          when: inventory_hostname is not match('^root@')
+
         - name: Run role add-repository
           ansible.builtin.include_role:
             name: add-repository
@@ -138,6 +149,11 @@
         - name: Run role packages
           ansible.builtin.include_role:
             name: packages
+
+        # A private RDS (platform-all#925): its PrivateLink path, checked before anything copies from it.
+        - name: Run role privatelink-gate
+          ansible.builtin.include_role:
+            name: privatelink-gate
 
         - name: Run role firewall
           ansible.builtin.include_role:

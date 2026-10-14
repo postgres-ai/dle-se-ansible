@@ -14,4 +14,8 @@ volume_type: ""  # (optional) The volume type.
 system_volume_size: 40  # system disk size (applicable for aws, gcp).
 state: present  # 'present' to create or 'absent' to delete
 
+# The Platform's cloud deploy: one firewall per server (SSH only), removed with it; AWS picks a
+# subnet that offers the type, GCP tries zones b, c, a. Off for deploy_dle.yml.
+dblab_cloud_per_server_firewall: false
+
 ...

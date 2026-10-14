@@ -27,23 +27,25 @@
         ansible_become: false
       run_once: true
 
-# Check if GCP_SERVICE_ACCOUNT_CONTENTS is defined
-- name: Lookup the GCP_SERVICE_ACCOUNT_CONTENTS environmental variable
+# Credentials: the Platform sends GCP_SERVICE_ACCOUNT_B64; deploy_dle.yml users set GCP_SERVICE_ACCOUNT_CONTENTS.
+- name: Lookup the GCP service account from the environment
   ansible.builtin.set_fact:
-    gcp_service_account_contents_raw: "{{ lookup('ansible.builtin.env', 'GCP_SERVICE_ACCOUNT_CONTENTS') | default('') }}"
+    gcp_service_account_contents_raw: >-
+      {{ lookup('ansible.builtin.env', 'GCP_SERVICE_ACCOUNT_B64') | default('', true)
+         or lookup('ansible.builtin.env', 'GCP_SERVICE_ACCOUNT_CONTENTS') | default('', true) }}
   no_log: true
 
 - name: "Fail if no GCP service account information is provided"
   ansible.builtin.fail:
-    msg: "GCP_SERVICE_ACCOUNT_CONTENTS is not defined or empty. Please provide GCP service account credentials."
-  when: gcp_service_account_contents_raw | length < 1
+    msg: "GCP_SERVICE_ACCOUNT_B64 or GCP_SERVICE_ACCOUNT_CONTENTS is not defined or empty. Please provide GCP service account credentials."
+  when: gcp_service_account_contents_raw | trim | length < 1
 
 # Decode GCP Service Account if base64 encoded
 - name: "Set variable: gcp_service_account_contents (b64decode)"
   ansible.builtin.set_fact:
-    gcp_service_account_contents: "{{ gcp_service_account_contents_raw | b64decode }}"
+    gcp_service_account_contents: "{{ gcp_service_account_contents_raw | trim | b64decode }}"
   no_log: true
-  when: gcp_service_account_contents_raw is match('^[a-zA-Z0-9+/]+={0,2}$')
+  when: gcp_service_account_contents_raw | trim is match('^[a-zA-Z0-9+/]+={0,2}$')
 
 # Set GCP Service Account Contents to raw value if not base64 encoded
 - name: "Set variable: gcp_service_account_contents"
@@ -52,13 +54,55 @@
   no_log: true
   when: gcp_service_account_contents is not defined
 
-# Project info
+- name: "GCP: Work out the project, zones and labels"
+  ansible.builtin.import_tasks: gcp_facts.yml
+
 - name: "GCP: Gather information about project"
   google.cloud.gcp_resourcemanager_project_info:
     auth_kind: serviceaccount
     service_account_contents: "{{ gcp_service_account_contents }}"
   register: project_info
-  when: gcp_project is not defined or gcp_project | length < 1
+  when: gcp_project_id | length < 1
+
+- name: "Set variable: gcp_project_id (first visible project)"
+  ansible.builtin.set_fact:
+    gcp_project_id: "{{ project_info.resources[0].projectNumber }}"
+  when: gcp_project_id | length < 1
+
+# The Platform's servers: the region's own zones (not every region has a zone a).
+- name: "GCP: Read the zones of region '{{ gcp_region }}'"
+  ansible.builtin.command:
+    argv: "{{ ['python3', role_path ~ '/files/gcp_region_zones.py', gcp_project_id, gcp_region]
+              + (['--all'] if state == 'absent' else []) }}"
+    stdin: >-
+      {{ gcp_service_account_contents if gcp_service_account_contents is string
+         else gcp_service_account_contents | to_json }}
+  register: _gcp_zone_info
+  changed_when: false
+  no_log: true
+  when:
+    - dblab_cloud_per_server_firewall | bool
+    - server_location is not match('.*-[a-z]$')
+
+- name: "GCP: Use the region's zones"
+  when: _gcp_zone_info is not skipped
+  block:
+    - name: "Set variable: gcp_region_zones"
+      ansible.builtin.set_fact:
+        gcp_region_zones: "{{ (_gcp_zone_info.stdout | from_json).zones | default([]) }}"
+
+    - name: "GCP: Fail when the region's zones cannot be read"
+      ansible.builtin.fail:
+        msg: >-
+          Google Cloud's zones of {{ gcp_region }} could not be read:
+          {{ (_gcp_zone_info.stdout | from_json).error | default('no zone is up') }}
+      when: gcp_region_zones | length < 1
+
+    # The second pass is for the zones; a project found by the lookup above is kept.
+    - name: "GCP: Work out the zones again"
+      ansible.builtin.include_tasks: gcp_facts.yml
+      vars:
+        gcp_project: "{{ gcp_project_id }}"
 
 # Create (if state is present)
 - block:
@@ -72,7 +116,46 @@
 
     - name: "GCP: set_fact gcp_network_name"
       ansible.builtin.set_fact:
-        gcp_network_name: "{{ server_network if server_network is defined and server_network | length > 0 else 'default' }}"
+        gcp_network_name: "{{ server_network if server_network | default('', true) | length > 0 else 'default' }}"
+
+    # An image name instead of an image path: the current Ubuntu 24.04 image. A new variable:
+    # set_fact cannot override server_image when it comes as an extra-var.
+    - name: "GCP: Use the Ubuntu 24.04 image family"
+      ansible.builtin.set_fact:
+        gcp_source_image: >-
+          {{ 'projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64'
+             if server_image == 'ubuntu-24.04' else server_image }}
+
+    # A custom-mode network needs the subnetwork of this region.
+    - name: "GCP: Find the subnetwork of '{{ gcp_network_name }}' in '{{ gcp_region }}'"
+      google.cloud.gcp_compute_subnetwork_info:
+        auth_kind: serviceaccount
+        service_account_contents: "{{ gcp_service_account_contents }}"
+        project: "{{ gcp_project_id }}"
+        region: "{{ gcp_region }}"
+      register: gcp_subnetworks
+      when: gcp_network_name != 'default'
+
+    # Built from the name, not the returned selfLink: a module given service_account_contents masks
+    # the account's values (the project id among them) in what it returns.
+    - name: "GCP: set_fact gcp_subnetwork"
+      ansible.builtin.set_fact:
+        gcp_subnetwork: >-
+          {{ ('projects/' ~ gcp_project_id ~ '/regions/' ~ gcp_region ~ '/subnetworks/' ~ gcp_subnetwork_names[0])
+             if gcp_subnetwork_names | length > 0 else '' }}
+      vars:
+        gcp_subnetwork_names: >-
+          {{ gcp_subnetworks.resources | default([])
+             | selectattr('network', 'match', '.*/networks/' ~ gcp_network_name ~ '$')
+             | map(attribute='name') | list }}
+      when: gcp_network_name != 'default'
+
+    - name: "GCP: Fail if the network has no subnetwork in '{{ gcp_region }}'"
+      ansible.builtin.fail:
+        msg: "The GCP network {{ gcp_network_name }} has no subnetwork in {{ gcp_region }}."
+      when:
+        - gcp_network_name != 'default'
+        - gcp_subnetwork | length < 1
 
     # Fail early if a VM with this name already exists. This prevents
     # accidentally overwriting a running DBLab instance when the user
@@ -81,167 +164,109 @@
       google.cloud.gcp_compute_instance_info:
         auth_kind: serviceaccount
         service_account_contents: "{{ gcp_service_account_contents }}"
-        project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
-        zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"
+        project: "{{ gcp_project_id }}"
+        zone: "{{ item }}"
         filters:
           - "name = {{ server_name | lower }}"
+      loop: "{{ gcp_zones }}"
       register: existing_instance_check
 
     - name: "GCP: Fail if instance '{{ server_name }}' already exists"
       ansible.builtin.fail:
         msg: >-
           A VM named '{{ server_name }}' already exists
-          (status: {{ existing_instance_check.resources[0].status | default('unknown') }},
-          IP: {{ existing_instance_check.resources[0].networkInterfaces[0].accessConfigs[0].natIP | default('N/A') }}).
+          (status: {{ (existing_instance_check.results | map(attribute='resources') | flatten | first).status | default('unknown') }}).
           Please choose a different server name or delete the existing instance
           from the GCP console before retrying.
       when:
-        - existing_instance_check.resources | length > 0
+        - existing_instance_check.results | map(attribute='resources') | flatten | length > 0
 
-    # block/rescue: create the disk first, then the instance.
-    # If the instance creation fails, the rescue block attempts to delete the
-    # orphaned disk so the next run can start clean.  The final 'fail' task
-    # re-raises the original error so the play still ends in failure.
-    - name: "GCP: Create or modify disk and instance for '{{ server_name }}'"
-      block:
-        - name: "GCP: Create or modify disk '{{ server_name }}-storage'"
-          google.cloud.gcp_compute_disk:
-            auth_kind: serviceaccount
-            service_account_contents: "{{ gcp_service_account_contents }}"
-            project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
-            zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"  # add "-b" if the zone is not defined
-            name: "{{ server_name }}-storage"
-            size_gb: "{{ volume_size | int }}"
-            state: present
-            labels:
-              env: dblab
-              server: "{{ server_name | lower }}"
-          register: gcp_disk_result
+    # Each zone: the disk first, then the instance with that disk; a failed zone removes its disk.
+    - name: "GCP: Create the disk and instance for '{{ server_name }}'"
+      ansible.builtin.include_tasks: gcp_create_in_zone.yml
+      loop: "{{ gcp_zones }}"
+      loop_control:
+        loop_var: gcp_zone
+      when: gcp_server_zone is not defined
 
-        - name: "GCP: Create or modify instance '{{ server_name }}'"
-          google.cloud.gcp_compute_instance:
-            auth_kind: serviceaccount
-            service_account_contents: "{{ gcp_service_account_contents }}"
-            project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
-            zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"  # add "-b" if the zone is not defined
-            name: "{{ server_name | lower }}"
-            machine_type: "{{ server_type }}"
-            disks:
-              - device_name: "{{ server_name }}-system"
-                auto_delete: true
-                boot: true
-                type: "{{ volume_type | default('pd-standard') }}"
-                initialize_params:
-                  disk_name: "{{ server_name }}-system"
-                  source_image: "{{ server_image }}"
-                  disk_size_gb: "{{ system_volume_size }}"  # system disk size
-              - device_name: "{{ server_name }}-storage"
-                auto_delete: true
-                type: "{{ volume_type | default('pd-ssd') }}"
-                initialize_params:
-                  disk_name: "{{ server_name }}-storage"
-                  disk_size_gb: "{{ volume_size | int }}"
-            network_interfaces:
-              - network:
-                  selfLink: "projects/{{ gcp_project | default(project_info.resources[0].projectNumber) }}/global/networks/{{ gcp_network_name }}"
-                access_configs:
-                  - name: External NAT
-                    type: ONE_TO_ONE_NAT
-            scheduling:
-              preemptible: "{{ gcp_compute_instance_preemptible | default(false) | bool }}"
-            labels:
-              env: dblab
-              server: "{{ server_name | lower }}"
-            tags:
-              items: "{{ ['dblab', server_name | lower] | unique }}"  # unique deduplicates in case server_name matches any existing tag
-            metadata:
-              ssh-keys: "root:{{ ssh_key_content }}"
-            status: "{{ instance.status | default(omit) }}"
-            state: present
-          register: server_result
-      rescue:
-        # Rescue runs whenever any task in the block above fails.
-        # CLEANUP: Delete the storage disk if the disk task ran (gcp_disk_result
-        # is defined).  This covers two scenarios:
-        #   1. First run: disk was just created (changed=true) — clean up.
-        #   2. Re-run after prior failure: disk exists from the earlier failed
-        #      attempt (changed=false) — still an orphan, clean up.
-        # The instance never booted successfully in either case, so the disk
-        # cannot contain production data.
-        # Use failed_when: false so a cleanup failure doesn't mask the original
-        # error (the 'fail' task below surfaces both outcomes).
-        - name: "GCP: Clean up disk '{{ server_name }}-storage' after failed resource creation"
-          google.cloud.gcp_compute_disk:
-            auth_kind: serviceaccount
-            service_account_contents: "{{ gcp_service_account_contents }}"
-            project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
-            zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"
-            name: "{{ server_name }}-storage"
-            state: absent
-          register: gcp_disk_cleanup_result
-          failed_when: false  # best-effort — if this fails, disk must be deleted manually from GCP console
-          when: gcp_disk_result is defined
+    - name: "GCP: Fail if no zone could create the server"
+      ansible.builtin.fail:
+        msg: "Google Cloud could not create the server: {{ gcp_zone_errors | default([]) | join(' | ') }}"
+      when: gcp_server_zone is not defined
 
-        - name: "GCP: Fail after cleanup"
-          ansible.builtin.fail:
-            msg: >-
-              GCP resource creation failed (task: {{ ansible_failed_task.name | default('unknown') }}).
-              Disk cleanup: {{ 'succeeded'
-              if (gcp_disk_cleanup_result is defined and not gcp_disk_cleanup_result.failed | default(false))
-              else 'skipped or failed — check for orphaned disk' }}.
-              Error: {{ ansible_failed_result.msg | default('unknown error') }}
-  when: state == 'present'
+    # SSH: the Platform's servers get their own rule on their network, removed with them.
+    - name: "GCP: Create the firewall rule '{{ server_name | lower }}-ssh' (SSH only)"
+      google.cloud.gcp_compute_firewall:
+        auth_kind: serviceaccount
+        service_account_contents: "{{ gcp_service_account_contents }}"
+        project: "{{ gcp_project_id }}"
+        name: "{{ server_name | lower }}-ssh"
+        description: "SSH to the DBLab server {{ server_name | lower }}"
+        # Relative to the project: this module always prefixes the project's URL.
+        network:
+          selfLink: "global/networks/{{ gcp_network_name }}"
+        allowed:
+          - ip_protocol: tcp
+            ports:
+              - "22"
+        source_ranges:
+          - "0.0.0.0/0"
+        target_tags:
+          - "{{ server_name | lower }}"
+        state: present
+      when: dblab_cloud_per_server_firewall | bool
 
-# Firewall rule for SSH access (shared across all DBLab instances)
-# Requires IAM permissions: compute.firewalls.create, compute.firewalls.update,
-# compute.networks.updatePolicy (on the service account)
-- name: "GCP: Create or update firewall rule 'dblab-allow-ssh'"
-  google.cloud.gcp_compute_firewall:
-    auth_kind: serviceaccount
-    service_account_contents: "{{ gcp_service_account_contents }}"
-    project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
-    name: dblab-allow-ssh
-    description: "Allow SSH access to DBLab instances"
-    allowed:
-      - ip_protocol: tcp
-        ports:
-          - "22"
-    # TODO: restrict source_ranges to known CIDRs (e.g. SI server IPs, customer VPN)
-    # Currently open to all IPs; access is scoped to dblab-tagged instances via target_tags
-    source_ranges:
-      - "0.0.0.0/0"
-    target_tags:
-      - dblab
-    state: present
+    # Firewall rule for SSH access (shared across all DBLab instances)
+    # Requires IAM permissions: compute.firewalls.create, compute.firewalls.update,
+    # compute.networks.updatePolicy (on the service account)
+    - name: "GCP: Create or update firewall rule 'dblab-allow-ssh'"
+      google.cloud.gcp_compute_firewall:
+        auth_kind: serviceaccount
+        service_account_contents: "{{ gcp_service_account_contents }}"
+        project: "{{ gcp_project_id }}"
+        name: dblab-allow-ssh
+        description: "Allow SSH access to DBLab instances"
+        allowed:
+          - ip_protocol: tcp
+            ports:
+              - "22"
+        # TODO: restrict source_ranges to known CIDRs (e.g. SI server IPs, customer VPN)
+        # Currently open to all IPs; access is scoped to dblab-tagged instances via target_tags
+        source_ranges:
+          - "0.0.0.0/0"
+        target_tags:
+          - dblab
+        state: present
+      when: not dblab_cloud_per_server_firewall | bool
   when: state == 'present'
 
 # Info
 - name: Show GCP instance info
   ansible.builtin.debug:
     msg:
-      - instance ID is {{ server_result.id }}
-      - instance Name is {{ server_result.name }}
-      - instance Image is {{ server_result.disks[0].licenses[0] | basename }}
-      - instance Type is {{ server_result.machineType | basename }}
+      - instance ID is {{ gcp_server.id }}
+      - instance Name is {{ gcp_server.name }}
+      - instance Zone is {{ gcp_server_zone }}
+      - instance Type is {{ gcp_server.machineType | basename }}
       - Block Storage Size is {{ volume_size }} gigabytes
-      - Public IP is {{ server_result.networkInterfaces[0].accessConfigs[0].natIP }}
-      - Private IP is {{ server_result.networkInterfaces[0].networkIP }}
-  when: server_result.id is defined
+      - Public IP is {{ gcp_server.networkInterfaces[0].accessConfigs[0].natIP }}
+      - Private IP is {{ gcp_server.networkInterfaces[0].networkIP }}
+  when: gcp_server.id is defined
 
 # set_fact: dblab_host
 - name: "Set variable: dblab_host (for deploy DBLab Engine)"
   ansible.builtin.set_fact:
-    dblab_host: "root@{{ server_result.networkInterfaces[0].accessConfigs[0].natIP }}"
-  when: server_result.networkInterfaces is defined
+    dblab_host: "root@{{ gcp_server.networkInterfaces[0].accessConfigs[0].natIP }}"
+  when: gcp_server.networkInterfaces is defined
 
 - name: "Wait for SSH port on '{{ dblab_host }}'"
   ansible.builtin.wait_for:
-    host: "{{ server_result.networkInterfaces[0].accessConfigs[0].natIP }}"
+    host: "{{ gcp_server.networkInterfaces[0].accessConfigs[0].natIP }}"
     port: 22
     delay: 5
     timeout: 300
   become_user: root
-  when: server_result.networkInterfaces is defined
+  when: gcp_server.networkInterfaces is defined
 
 # The port check above succeeds as soon as sshd starts, but on GCP the guest
 # agent may not have written the SSH key to authorized_keys yet. Retry actual
@@ -258,36 +283,48 @@
   until: ssh_auth_check.rc == 0
   changed_when: false
   when:
-    - server_result.networkInterfaces is defined
+    - gcp_server.networkInterfaces is defined
     - dblab_tmp_ssh_key_name is defined
 
-# Delete (if state is absent)
+# Delete (if state is absent): every zone the server may be in.
 - block:
     - name: "GCP: Delete instance '{{ server_name }}'"
       google.cloud.gcp_compute_instance:
         auth_kind: serviceaccount
         service_account_contents: "{{ gcp_service_account_contents }}"
-        project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
-        zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"  # add "-b" if the zone is not defined
+        project: "{{ gcp_project_id }}"
+        zone: "{{ item }}"
         name: "{{ server_name | lower }}"
         state: absent
+      loop: "{{ gcp_zones }}"
 
     - name: "GCP: Delete disk '{{ server_name }}-storage'"
       google.cloud.gcp_compute_disk:
         auth_kind: serviceaccount
         service_account_contents: "{{ gcp_service_account_contents }}"
-        project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
-        zone: "{{ server_location + '-b' if not server_location is match('.*-[a-z]$') else server_location }}"  # add "-b" if the zone is not defined
-        name: "{{ server_name }}-storage"
+        project: "{{ gcp_project_id }}"
+        zone: "{{ item }}"
+        name: "{{ (server_name | lower) if dblab_cloud_per_server_firewall | bool else server_name }}-storage"
         state: absent
+      loop: "{{ gcp_zones }}"
+
+    - name: "GCP: Delete the firewall rule '{{ server_name | lower }}-ssh'"
+      google.cloud.gcp_compute_firewall:
+        auth_kind: serviceaccount
+        service_account_contents: "{{ gcp_service_account_contents }}"
+        project: "{{ gcp_project_id }}"
+        name: "{{ server_name | lower }}-ssh"
+        state: absent
+      when: dblab_cloud_per_server_firewall | bool
 
     - name: "GCP: Delete firewall rule 'dblab-allow-ssh'"
       google.cloud.gcp_compute_firewall:
         auth_kind: serviceaccount
         service_account_contents: "{{ gcp_service_account_contents }}"
-        project: "{{ gcp_project | default(project_info.resources[0].projectNumber) }}"
+        project: "{{ gcp_project_id }}"
         name: dblab-allow-ssh
         state: absent
+      when: not dblab_cloud_per_server_firewall | bool
   when: state == 'absent'
 
 ...

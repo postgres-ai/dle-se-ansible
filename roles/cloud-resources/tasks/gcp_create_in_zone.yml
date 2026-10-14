@@ -1,0 +1,88 @@
+---
+# One zone's attempt (gcp.yml): the data disk, then the instance with it attached. A failure
+# removes this zone's disk and records the reason, so gcp.yml can try the next zone. The include's
+# own `when` is evaluated for every zone before any runs, so a zone after the one that worked is
+# skipped here, at run time.
+
+- name: "GCP: Create the server in zone '{{ gcp_zone }}' unless an earlier zone has it"
+  when: gcp_server_zone is not defined
+  block:
+    - name: "GCP: Create the server in zone '{{ gcp_zone }}'"
+      block:
+        - name: "GCP: Create or modify disk '{{ server_name }}-storage' in '{{ gcp_zone }}'"
+          google.cloud.gcp_compute_disk:
+            auth_kind: serviceaccount
+            service_account_contents: "{{ gcp_service_account_contents }}"
+            project: "{{ gcp_project_id }}"
+            zone: "{{ gcp_zone }}"
+            name: "{{ (server_name | lower) if dblab_cloud_per_server_firewall | bool else server_name }}-storage"
+            size_gb: "{{ volume_size | int }}"
+            type: "{{ volume_type if volume_type | default('', true) | length > 0 else ('pd-balanced' if dblab_cloud_per_server_firewall | bool else omit) }}"
+            state: present
+            labels: "{{ gcp_labels }}"
+          register: gcp_disk_result
+
+        - name: "GCP: Create or modify instance '{{ server_name }}' in '{{ gcp_zone }}'"
+          google.cloud.gcp_compute_instance:
+            auth_kind: serviceaccount
+            service_account_contents: "{{ gcp_service_account_contents }}"
+            project: "{{ gcp_project_id }}"
+            zone: "{{ gcp_zone }}"
+            name: "{{ server_name | lower }}"
+            machine_type: "{{ server_type }}"
+            disks:
+              - device_name: "{{ server_name | lower }}-system"
+                auto_delete: true
+                boot: true
+                initialize_params:
+                  disk_name: "{{ server_name | lower }}-system"
+                  source_image: "{{ gcp_source_image }}"
+                  disk_size_gb: "{{ system_volume_size }}"  # system disk size
+                  disk_type: "{{ 'pd-balanced' if dblab_cloud_per_server_firewall | bool else omit }}"
+              - device_name: "{{ server_name | lower }}-storage"
+                auto_delete: true
+                # By name: the registered result's selfLink is masked (see gcp.yml, gcp_subnetwork).
+                source:
+                  selfLink: "projects/{{ gcp_project_id }}/zones/{{ gcp_zone }}/disks/{{ gcp_disk_result.name }}"
+            network_interfaces:
+              - network:
+                  selfLink: "projects/{{ gcp_project_id }}/global/networks/{{ gcp_network_name }}"
+                subnetwork: "{{ {'selfLink': gcp_subnetwork} if (gcp_subnetwork | default('') | length > 0) else omit }}"
+                access_configs:
+                  - name: External NAT
+                    type: ONE_TO_ONE_NAT
+            scheduling:
+              preemptible: "{{ gcp_compute_instance_preemptible | default(false) | bool }}"
+            labels: "{{ gcp_labels }}"
+            tags:
+              # The Platform's servers carry only their own tag, so no shared rule opens them.
+              items: "{{ [server_name | lower] if dblab_cloud_per_server_firewall | bool else (['dblab', server_name | lower] | unique) }}"
+            metadata:
+              ssh-keys: "root:{{ ssh_key_content }}"
+            status: "{{ instance.status | default(omit) }}"
+            state: present
+          register: server_result
+
+        # Kept in its own fact: a skipped later zone still overwrites server_result.
+        - name: "GCP: The server is in zone '{{ gcp_zone }}'"
+          ansible.builtin.set_fact:
+            gcp_server_zone: "{{ gcp_zone }}"
+            gcp_server: "{{ server_result }}"
+      rescue:
+        - name: "GCP: Record why zone '{{ gcp_zone }}' failed"
+          ansible.builtin.set_fact:
+            gcp_zone_errors: "{{ gcp_zone_errors | default([]) + [gcp_zone ~ ': ' ~ (ansible_failed_result.msg | default('unknown error') | string)] }}"
+
+        # Best effort: the destroy also removes this disk by name in every zone.
+        - name: "GCP: Clean up disk '{{ server_name }}-storage' in '{{ gcp_zone }}'"
+          google.cloud.gcp_compute_disk:
+            auth_kind: serviceaccount
+            service_account_contents: "{{ gcp_service_account_contents }}"
+            project: "{{ gcp_project_id }}"
+            zone: "{{ gcp_zone }}"
+            name: "{{ (server_name | lower) if dblab_cloud_per_server_firewall | bool else server_name }}-storage"
+            state: absent
+          failed_when: false
+          when: gcp_disk_result is defined
+
+...

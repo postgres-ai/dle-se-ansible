@@ -60,6 +60,9 @@
         api_token: "{{ lookup('ansible.builtin.env', 'HCLOUD_API_TOKEN') }}"
         name: "{{ ssh_key_name }}"
       register: ssh_keys
+      until: ssh_keys is succeeded
+      retries: 5
+      delay: 10
       when: ssh_key_name | length > 0
 
     # Stop, if the ssh key is not found
