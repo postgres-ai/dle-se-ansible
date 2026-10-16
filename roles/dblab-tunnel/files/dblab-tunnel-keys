@@ -1,0 +1,187 @@
+#!/usr/bin/python3 -I
+"""sshd AuthorizedKeysCommand for the DBLab tunnel user (platform-all#953).
+
+sshd runs this for every login attempt as the tunnel user. It prints the public
+keys allowed to open a tunnel, each restricted to port forwarding. The keys live
+on the Platform (Console "Clone access"); this asks for them with the server's
+own access token and caches the answer:
+
+- a successful answer is reused for 'ttl' seconds, so a removed key stops
+  working for new connections within that time;
+- while the Platform cannot be reached, the last answer is used for at most
+  'stale_max' seconds, and the Platform is asked again only every
+  'retry_after' seconds, so a login never waits on a known outage twice;
+- an answer that refuses the token (401, 403, 404) wipes the cache: the
+  server was revoked or removed, and nothing should open a tunnel any more.
+
+Prints nothing and exits 0 on any error: an empty answer denies the login.
+Standard library only; run with -I so nothing on the path is imported.
+"""
+
+import base64
+import fcntl
+import json
+import os
+import re
+import struct
+import sys
+import tempfile
+import time
+import urllib.error
+import urllib.request
+
+CONFIG_PATH = "/etc/dblab-tunnel/keys.conf"
+KEY_TYPES = (
+    "ssh-ed25519",
+    "ssh-rsa",
+    "ecdsa-sha2-nistp256",
+    "ecdsa-sha2-nistp384",
+    "ecdsa-sha2-nistp521",
+    "sk-ssh-ed25519@openssh.com",
+    "sk-ecdsa-sha2-nistp256@openssh.com",
+)
+MAX_KEY_LEN = 16384
+KEY_RE = re.compile(r"^([a-z0-9@.-]+) ([A-Za-z0-9+/]+={0,3})(?: [^\x00-\x1f\x7f]*)?$")
+
+
+def valid_key(text):
+    """The 'type base64' part of a single-line OpenSSH public key, or None.
+
+    The base64 body must decode and carry the same key type it is labelled
+    with, so random text, a private key or two keys on one line never pass.
+    The comment is dropped: nothing from it reaches authorized_keys output.
+    """
+    if not isinstance(text, str) or len(text) > MAX_KEY_LEN:
+        return None
+    m = KEY_RE.match(text.strip())
+    if not m or m.group(1) not in KEY_TYPES:
+        return None
+    try:
+        blob = base64.b64decode(m.group(2), validate=True)
+    except ValueError:
+        return None
+    if len(blob) < 4:
+        return None
+    (n,) = struct.unpack(">I", blob[:4])
+    if blob[4:4 + n] != m.group(1).encode():
+        return None
+    return m.group(1) + " " + m.group(2)
+
+
+def read_json(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
+def write_json(path, data):
+    d = os.path.dirname(path)
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".tmp-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        os.replace(tmp, path)
+    except OSError:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def remove(path):
+    try:
+        os.unlink(path)
+    except OSError:
+        pass
+
+
+def fetch(conf, token):
+    """('ok', keys) | ('refused', None) | ('unavailable', None)."""
+    req = urllib.request.Request(
+        conf["api_base_url"].rstrip("/") + "/rpc/dblab_tunnel_keys_fetch",
+        data=b"{}",
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "access-token": token,
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=conf["timeout"]) as resp:
+            body = json.loads(resp.read(1 << 20).decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        return ("refused", None) if e.code in (401, 403, 404) else ("unavailable", None)
+    except (urllib.error.URLError, OSError, ValueError):
+        return "unavailable", None
+    keys = body.get("keys") if isinstance(body, dict) else None
+    if not isinstance(keys, list):
+        return "unavailable", None
+    return "ok", [k for k in (valid_key(x) for x in keys) if k]
+
+
+def keys_for_login(conf, now):
+    cache_dir = conf["cache_dir"]
+    cache_path = os.path.join(cache_dir, "keys.json")
+    failed_path = os.path.join(cache_dir, "failed.json")
+
+    cache = read_json(cache_path)
+    cached = cache.get("keys") if isinstance(cache, dict) else None
+    age = now - cache.get("fetched_at", 0) if isinstance(cache, dict) else None
+    if isinstance(cached, list) and age is not None and 0 <= age < conf["ttl"]:
+        return cached
+
+    def stale():
+        if isinstance(cached, list) and age is not None and 0 <= age < conf["stale_max"]:
+            return cached
+        return []
+
+    failed = read_json(failed_path)
+    if isinstance(failed, dict) and 0 <= now - failed.get("at", 0) < conf["retry_after"]:
+        return stale()
+
+    try:
+        with open(conf["token_file"], encoding="utf-8") as f:
+            token = f.read().strip()
+    except OSError:
+        token = ""
+    if not token:
+        return []
+
+    outcome, keys = fetch(conf, token)
+    if outcome == "ok":
+        write_json(cache_path, {"fetched_at": now, "keys": keys})
+        remove(failed_path)
+        return keys
+    if outcome == "refused":
+        remove(cache_path)
+        write_json(failed_path, {"at": now})
+        return []
+    write_json(failed_path, {"at": now})
+    return stale()
+
+
+def main(argv):
+    conf = read_json(CONFIG_PATH)
+    if not isinstance(conf, dict):
+        return 0
+    if len(argv) < 2 or argv[1] != conf.get("user"):
+        return 0
+    lock_path = os.path.join(conf["cache_dir"], "lock")
+    with open(lock_path, "a", encoding="utf-8") as lock:
+        # One fetch at a time: a burst of logins waits for the first answer
+        # and then reads it from the cache.
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        keys = keys_for_login(conf, time.time())
+    for key in keys:
+        print("restrict,port-forwarding " + key)
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main(sys.argv))
+    except Exception:  # noqa: BLE001 - any failure denies the login, quietly
+        sys.exit(0)

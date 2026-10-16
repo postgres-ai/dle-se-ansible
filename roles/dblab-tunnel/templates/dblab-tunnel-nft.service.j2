@@ -1,0 +1,13 @@
+# {{ ansible_managed }} (role dblab-tunnel, platform-all#953)
+[Unit]
+Description=Firewall rules for the DBLab tunnel user
+Before=ssh.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/dblab-tunnel/nft.conf
+ExecStop=/usr/sbin/nft delete table inet dblab_tunnel
+
+[Install]
+WantedBy=multi-user.target

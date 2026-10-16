@@ -1,0 +1,10 @@
+# {{ ansible_managed }} (role dblab-tunnel, platform-all#953)
+#
+# Sorts before cloud-init's 50-cloud-init.conf, and sshd keeps the FIRST value it reads for each
+# keyword, so these win over anything an image or cloud-init sets later. Keys only; root keeps
+# key login for the PostgresAI team.
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin prohibit-password
+MaxStartups 10:30:60
+LoginGraceTime 20

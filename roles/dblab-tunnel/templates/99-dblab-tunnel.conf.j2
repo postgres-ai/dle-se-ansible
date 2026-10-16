@@ -1,0 +1,22 @@
+# {{ ansible_managed }} (role dblab-tunnel, platform-all#953)
+#
+# '{{ dblab_tunnel_user }}' can only forward TCP to the clone ports on this server. Its keys are
+# not in any file: sshd asks the Platform for them through the command below. Both 127.0.0.1 and
+# localhost are listed because PermitOpen compares the literal host the client asks for, and the
+# Console's clone page uses 'localhost'.
+Match User {{ dblab_tunnel_user }}
+    AuthorizedKeysFile none
+    AuthorizedKeysCommand /usr/local/lib/dblab-tunnel/keys %u
+    AuthorizedKeysCommandUser {{ dblab_tunnel_keys_user }}
+    AllowTcpForwarding local
+    PermitOpen {% for p in range(dblab_engine_clone_port_pool.from | int, dblab_engine_clone_port_pool.to | int + 1) %}127.0.0.1:{{ p }} localhost:{{ p }}{{ ' ' if not loop.last else '' }}{% endfor %}
+
+    ForceCommand /usr/sbin/nologin
+    PermitTTY no
+    X11Forwarding no
+    AllowAgentForwarding no
+    AllowStreamLocalForwarding no
+    PermitTunnel no
+    GatewayPorts no
+# Ends the block above, so nothing read after this file is scoped to the tunnel user.
+Match all

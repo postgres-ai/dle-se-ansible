@@ -213,6 +213,19 @@ dblab_cloud_preload_libraries: "pg_stat_statements, pg_stat_kcache, auto_explain
 # Firewall: deny incoming except SSH. Off by default so existing installs are untouched.
 dblab_firewall_install: false
 
+# Clone access without a shell (platform-all#953). A user that can only forward TCP to the clone
+# ports, whose keys the Platform holds and sshd asks for at each login. Cloud deploys turn it on;
+# off by default so existing installs are untouched.
+dblab_tunnel_install: false
+dblab_tunnel_user: dblab-tunnel
+dblab_tunnel_keys_user: dblab-tunnel-keys  # runs the keys command; holds the Platform token
+dblab_tunnel_keys_ttl: 60  # seconds a fetched key list is reused; a removed key stops working after this
+dblab_tunnel_keys_stale_max: 86400  # while the Platform is unreachable, the last list is used for this long
+dblab_tunnel_keys_retry_after: 10  # after a failed fetch, seconds before the Platform is asked again
+dblab_tunnel_keys_timeout: 5  # seconds for one fetch; sshd waits on it during the login
+dblab_tunnel_max_connections: 200  # concurrent forwarded connections for the tunnel user
+dblab_tunnel_sshd_service: ssh
+
 # Usage instructions
 print_usage_instructions: true # Print the usage instructions after deployment
 

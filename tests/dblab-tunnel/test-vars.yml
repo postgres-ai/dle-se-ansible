@@ -1,0 +1,9 @@
+---
+# Short cache times so revocation and outages can be watched in seconds; a small connection cap
+# so it can be reached.
+dblab_agent_platform_token: box-token
+dblab_agent_api_base_url: http://127.0.0.1:18080/api/general
+dblab_tunnel_keys_ttl: 2
+dblab_tunnel_keys_retry_after: 1
+dblab_tunnel_keys_stale_max: 30
+dblab_tunnel_max_connections: 3
