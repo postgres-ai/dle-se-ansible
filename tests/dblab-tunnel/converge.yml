@@ -1,0 +1,15 @@
+---
+
+# Applies the dblab-tunnel role to the container it runs in (see integration.sh). The test's
+# settings come from test-vars.yml as extra-vars, as the Platform's do: vars_files would
+# otherwise outrank play vars.
+
+- name: Apply the dblab-tunnel role
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../../vars/main.yml
+  roles:
+    - role: ../../roles/dblab-tunnel

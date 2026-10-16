@@ -1,0 +1,215 @@
+---
+
+# Clone access without a shell (platform-all#953). Customers reach clones through
+# '{{ dblab_tunnel_user }}', which can only forward TCP to the clone ports on this server; root
+# keeps only the keys the Platform sends ('ssh_public_keys', the PostgresAI team's).
+#
+# The tunnel user's keys are never written here. sshd runs /usr/local/lib/dblab-tunnel/keys at
+# each login, which asks the Platform with the token the dblab-agent role just obtained, so the
+# Console can add or remove a key on a running server without touching it.
+#
+# Runs after the dblab-agent role: it needs 'dblab_agent_platform_token'.
+
+- name: Ensure the tunnel has what it needs
+  ansible.builtin.assert:
+    that:
+      - dblab_agent_platform_token | default('', true) | length > 0
+      - dblab_agent_api_base_url | urlsplit('scheme') == 'https' or
+        dblab_agent_api_base_url | urlsplit('hostname') is match('^(localhost|127\.\d{1,3}\.\d{1,3}\.\d{1,3}|::1)$')
+      - dblab_engine_clone_port_pool.from | int > 0
+      - dblab_engine_clone_port_pool.to | int >= dblab_engine_clone_port_pool.from | int
+    fail_msg: >-
+      The clone tunnel needs the Platform token from the dblab-agent role, an https Platform
+      address ('{{ dblab_agent_api_base_url }}') and the clone port pool. Run it after dblab-agent.
+    quiet: true
+
+- name: Install nftables
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+  register: dblab_tunnel_apt
+  until: dblab_tunnel_apt is success
+  delay: 10
+  retries: 3
+
+# '*' rather than '!': with UsePAM off, sshd treats a '!' password as a locked account and
+# refuses even key logins. Home '/': sshd changes to it for a session, and a missing one adds
+# "Could not chdir to home directory" to the nologin message a customer sees.
+- name: Create the tunnel user '{{ dblab_tunnel_user }}'
+  ansible.builtin.user:
+    name: "{{ dblab_tunnel_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: /
+    create_home: false
+    password: "*"
+
+- name: Create the user that runs the keys command '{{ dblab_tunnel_keys_user }}'
+  ansible.builtin.user:
+    name: "{{ dblab_tunnel_keys_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    home: /nonexistent
+    create_home: false
+    password: "*"
+
+- name: Create /etc/dblab-tunnel
+  ansible.builtin.file:
+    path: /etc/dblab-tunnel
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Store the Platform token for the keys command
+  ansible.builtin.copy:
+    content: "{{ dblab_agent_platform_token }}"
+    dest: /etc/dblab-tunnel/token
+    owner: root
+    group: "{{ dblab_tunnel_keys_user }}"
+    mode: "0640"
+  no_log: true
+  diff: false
+
+- name: Write the keys command's settings
+  ansible.builtin.template:
+    src: keys.conf.j2
+    dest: /etc/dblab-tunnel/keys.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Create the keys command's cache directory
+  ansible.builtin.file:
+    path: /var/cache/dblab-tunnel
+    state: directory
+    owner: "{{ dblab_tunnel_keys_user }}"
+    group: "{{ dblab_tunnel_keys_user }}"
+    mode: "0700"
+
+# sshd refuses an AuthorizedKeysCommand unless the file and every directory above it are owned by
+# root and writable by nobody else.
+- name: Create /usr/local/lib/dblab-tunnel
+  ansible.builtin.file:
+    path: /usr/local/lib/dblab-tunnel
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install the keys command
+  ansible.builtin.copy:
+    src: dblab-tunnel-keys
+    dest: /usr/local/lib/dblab-tunnel/keys
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write the tunnel firewall rules
+  ansible.builtin.template:
+    src: nft.conf.j2
+    dest: /etc/dblab-tunnel/nft.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: dblab_tunnel_nft_conf
+
+- name: Install the unit that loads them
+  ansible.builtin.template:
+    src: dblab-tunnel-nft.service.j2
+    dest: /etc/systemd/system/dblab-tunnel-nft.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: dblab_tunnel_nft_unit
+
+# Restarted on every run, not only when the files changed in this run: a run that wrote them and
+# stopped before this task would otherwise leave the old rules loaded. It touches its own table only.
+- name: Load the tunnel firewall rules, now and at every boot
+  ansible.builtin.systemd:
+    name: dblab-tunnel-nft
+    state: restarted
+    enabled: true
+    daemon_reload: true
+  changed_when: dblab_tunnel_nft_conf is changed or dblab_tunnel_nft_unit is changed
+
+- name: Ensure the tunnel firewall rules are loaded
+  ansible.builtin.command: nft list table inet dblab_tunnel
+  changed_when: false
+
+# Each file is checked on its own first (validate), so a bad one is never installed; the whole
+# configuration is checked below, before sshd is reloaded.
+- name: Write the sshd hardening every cloud server gets
+  ansible.builtin.template:
+    src: 00-pgai-hardening.conf.j2
+    dest: /etc/ssh/sshd_config.d/00-pgai-hardening.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/sbin/sshd -t -f %s
+  register: dblab_tunnel_sshd_hardening
+
+- name: Write the tunnel user's sshd settings
+  ansible.builtin.template:
+    src: 99-dblab-tunnel.conf.j2
+    dest: /etc/ssh/sshd_config.d/99-dblab-tunnel.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: /usr/sbin/sshd -t -f %s
+  register: dblab_tunnel_sshd_tunnel
+
+- name: Check the whole sshd configuration
+  ansible.builtin.command: /usr/sbin/sshd -t
+  changed_when: false
+
+# What sshd will actually apply, not what the files say: an earlier file or the main config could
+# still win for any keyword.
+- name: Read the settings sshd applies to the tunnel user
+  ansible.builtin.command: /usr/sbin/sshd -T -C user={{ dblab_tunnel_user }},host=check,addr=192.0.2.1
+  register: dblab_tunnel_sshd_effective
+  changed_when: false
+
+- name: Read the settings sshd applies to root
+  ansible.builtin.command: /usr/sbin/sshd -T -C user=root,host=check,addr=192.0.2.1
+  register: dblab_tunnel_sshd_effective_root
+  changed_when: false
+
+- name: Ensure sshd applies the tunnel restrictions
+  ansible.builtin.assert:
+    that:
+      - "'allowtcpforwarding local' in dblab_tunnel_sshd_effective.stdout_lines"
+      - "'forcecommand /usr/sbin/nologin' in dblab_tunnel_sshd_effective.stdout_lines"
+      - "'permittty no' in dblab_tunnel_sshd_effective.stdout_lines"
+      - "'x11forwarding no' in dblab_tunnel_sshd_effective.stdout_lines"
+      - "'allowagentforwarding no' in dblab_tunnel_sshd_effective.stdout_lines"
+      - "'allowstreamlocalforwarding no' in dblab_tunnel_sshd_effective.stdout_lines"
+      - "'permittunnel no' in dblab_tunnel_sshd_effective.stdout_lines"
+      - "'gatewayports no' in dblab_tunnel_sshd_effective.stdout_lines"
+      - "'authorizedkeysfile none' in dblab_tunnel_sshd_effective.stdout_lines"
+      - "'authorizedkeyscommand /usr/local/lib/dblab-tunnel/keys %u' in dblab_tunnel_sshd_effective.stdout_lines"
+      - "'authorizedkeyscommanduser ' ~ dblab_tunnel_keys_user in dblab_tunnel_sshd_effective.stdout_lines"
+      - dblab_tunnel_sshd_permitopen | length == 2 * (dblab_engine_clone_port_pool.to | int - dblab_engine_clone_port_pool.from | int + 1)
+      - dblab_tunnel_sshd_permitopen | reject('match', '^(127\.0\.0\.1|localhost):\d+$') | list | length == 0
+      - "'passwordauthentication no' in dblab_tunnel_sshd_effective_root.stdout_lines"
+      - "'permitrootlogin without-password' in dblab_tunnel_sshd_effective_root.stdout_lines"
+      - "'authorizedkeyscommand none' in dblab_tunnel_sshd_effective_root.stdout_lines"
+      - "'allowtcpforwarding local' not in dblab_tunnel_sshd_effective_root.stdout_lines"
+    fail_msg: >-
+      sshd does not apply the tunnel user's restrictions as written. An earlier sshd setting wins
+      over /etc/ssh/sshd_config.d/99-dblab-tunnel.conf; see 'sshd -T -C user={{ dblab_tunnel_user }}'.
+    quiet: true
+  vars:
+    dblab_tunnel_sshd_permitopen: >-
+      {{ (dblab_tunnel_sshd_effective.stdout_lines | select('match', '^permitopen ') | first | default('permitopen'))
+         .split()[1:] }}
+
+# A task, not a handler: the restrictions must be live when the role returns, and flushing
+# handlers here would also run whatever else the deploy has notified so far. Reloaded on every
+# run (a reload keeps open sessions): a run that wrote the files and stopped before this task
+# would otherwise leave sshd on the old config, and the files read as unchanged next time.
+- name: Reload sshd
+  ansible.builtin.systemd:
+    name: "{{ dblab_tunnel_sshd_service }}"
+    state: reloaded
+  changed_when: dblab_tunnel_sshd_hardening is changed or dblab_tunnel_sshd_tunnel is changed

@@ -112,6 +112,7 @@
             joe_bot_install: true
             joe_agent_install: true
             dblab_firewall_install: true
+            dblab_tunnel_install: true
             dblab_engine_config_mode: "0600"
             joe_communication_type: webui
             joe_communication_signing_secret: "{{ dblab_cloud_joe_signing_secret }}"
@@ -132,7 +133,9 @@
           ansible.builtin.include_role:
             name: authorized-keys
 
-        # AWS logs in as ubuntu; the Platform tells users to connect as root on every cloud.
+        # AWS logs in as ubuntu. The keys the Platform sends go to root on every cloud: the PostgresAI
+        # team's, and a customer's only where the Platform allows them (platform-all#953). Clone
+        # access is the tunnel user's (role dblab-tunnel).
         - name: Add the Platform's SSH keys for root too
           ansible.posix.authorized_key:
             user: root
@@ -196,6 +199,12 @@
         - name: Run role joe-agent
           ansible.builtin.include_role:
             name: joe-agent
+
+        # Clone access without a shell (platform-all#953): needs the token dblab-agent obtained.
+        - name: Run role dblab-tunnel
+          ansible.builtin.include_role:
+            name: dblab-tunnel
+          when: dblab_tunnel_install | bool
 
         # Joe posts its answers with this token. It is the Joe instance token the registration just
         # minted, scoped to this Joe's own sessions; nothing org-wide is left on the server.

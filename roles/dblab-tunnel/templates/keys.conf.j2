@@ -1,0 +1,10 @@
+{{ {
+  'user': dblab_tunnel_user,
+  'api_base_url': dblab_agent_api_base_url,
+  'token_file': '/etc/dblab-tunnel/token',
+  'cache_dir': '/var/cache/dblab-tunnel',
+  'ttl': dblab_tunnel_keys_ttl | int,
+  'stale_max': dblab_tunnel_keys_stale_max | int,
+  'retry_after': dblab_tunnel_keys_retry_after | int,
+  'timeout': dblab_tunnel_keys_timeout | int
+} | to_nice_json }}

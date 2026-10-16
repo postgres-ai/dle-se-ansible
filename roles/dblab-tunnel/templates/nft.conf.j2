@@ -1,0 +1,26 @@
+#!/usr/sbin/nft -f
+# {{ ansible_managed }} (role dblab-tunnel, platform-all#953)
+#
+# Backstop under sshd's PermitOpen: whatever sshd is told, connections opened by the tunnel user
+# reach only the clone ports on 127.0.0.1, at most {{ dblab_tunnel_max_connections }} at a time.
+# Anything else is rejected at once rather than dropped, so a refused forward fails fast.
+# Its own table, loaded by its own unit: /etc/nftables.conf starts with 'flush ruleset', which
+# would wipe the rules Docker and ufw keep in the same kernel.
+
+table inet dblab_tunnel
+delete table inet dblab_tunnel
+
+table inet dblab_tunnel {
+    chain output {
+        type filter hook output priority filter; policy accept;
+        meta skuid "{{ dblab_tunnel_user }}" jump tunnel
+    }
+
+    chain tunnel {
+        ct state established,related accept
+        ip daddr 127.0.0.1 tcp dport {{ dblab_engine_clone_port_pool.from }}-{{ dblab_engine_clone_port_pool.to }} ct count over {{ dblab_tunnel_max_connections }} reject with tcp reset
+        ip daddr 127.0.0.1 tcp dport {{ dblab_engine_clone_port_pool.from }}-{{ dblab_engine_clone_port_pool.to }} accept
+        meta l4proto tcp reject with tcp reset
+        reject
+    }
+}

@@ -67,6 +67,7 @@ tests: ## tests Ansible
 	$(MAKE) test-dblab-agent
 	$(MAKE) test-joe-agent
 	$(MAKE) test-cloud-deploy
+	$(MAKE) test-dblab-tunnel
 	$(MAKE) molecule-test-all
 
 .PHONY: tests-fast
@@ -75,6 +76,7 @@ tests-fast: ## tests Ansible quickly
 	$(MAKE) test-dblab-agent
 	$(MAKE) test-joe-agent
 	$(MAKE) test-cloud-deploy
+	$(MAKE) test-dblab-tunnel
 	$(MAKE) molecule-converge
 
 .PHONY: test-install-retries
@@ -88,6 +90,11 @@ test-dblab-agent: ## Run the dblab-agent role tests (localhost only, no target h
 .PHONY: test-cloud-deploy
 test-cloud-deploy: ## Run the cloud deploy tests (localhost only, no target host)
 	source .venv/bin/activate && ansible-playbook tests/cloud-deploy/test.yml
+
+.PHONY: test-dblab-tunnel
+test-dblab-tunnel: ## Run the dblab-tunnel tests: the keys command, then the role in an Ubuntu 24.04 container (needs Docker)
+	python3 -m unittest tests/dblab-tunnel/test_keys.py
+	tests/dblab-tunnel/integration.sh
 
 .PHONY: test-joe-agent
 test-joe-agent: ## Run the joe-agent role tests (localhost only, no target host)
